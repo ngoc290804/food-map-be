@@ -1,6 +1,6 @@
 package com.doan.backend.modules.chatbot.dto.response;
 
-import com.doan.backend.modules.restaurant.dto.response.RestaurantResponse;
+import com.doan.backend.modules.restaurant.vo.CuaHangVo;
 import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
@@ -9,5 +9,5 @@ import lombok.Getter;
 @Builder
 public class ChatbotResponse {
     private final String answer;
-    private final List<RestaurantResponse> restaurants;
+    private final List<CuaHangVo> cuaHangs;
 }

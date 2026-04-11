@@ -20,7 +20,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .message(restaurants.isEmpty()
                         ? "Chưa có gợi ý phù hợp từ từ khóa hiện tại."
                         : "Đây là danh sách quán ăn phù hợp với yêu cầu của bạn.")
-                .restaurants(restaurants)
+                .cuaHangs(restaurants)
                 .build();
     }
 
@@ -29,7 +29,7 @@ public class RecommendationServiceImpl implements RecommendationService {
         var restaurants = restaurantService.search(null, 0, 5).getItems();
         return RecommendationResponse.builder()
                 .message("Danh sách quán ăn nổi bật để frontend có thể hiển thị nhanh.")
-                .restaurants(restaurants)
+                .cuaHangs(restaurants)
                 .build();
     }
 }

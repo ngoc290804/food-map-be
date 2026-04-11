@@ -2,10 +2,12 @@ package com.doan.backend.modules.restaurant.controller;
 
 import com.doan.backend.common.dto.ApiResponse;
 import com.doan.backend.common.dto.PageResponse;
-import com.doan.backend.modules.restaurant.dto.request.RestaurantCreateRequest;
-import com.doan.backend.modules.restaurant.dto.request.RestaurantUpdateRequest;
-import com.doan.backend.modules.restaurant.dto.response.RestaurantResponse;
+import com.doan.backend.common.enums.MenuCategory;
+import com.doan.backend.common.enums.MenuDetail;
+import com.doan.backend.modules.restaurant.dto.request.CuaHangCreateDto;
+import com.doan.backend.modules.restaurant.dto.request.CuaHangUpdateDto;
 import com.doan.backend.modules.restaurant.service.RestaurantService;
+import com.doan.backend.modules.restaurant.vo.CuaHangVo;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -27,20 +29,20 @@ public class RestaurantController {
     private final RestaurantService restaurantService;
 
     @PostMapping
-    public ApiResponse<RestaurantResponse> create(@Valid @RequestBody RestaurantCreateRequest request) {
+    public ApiResponse<CuaHangVo> create(@Valid @RequestBody CuaHangCreateDto request) {
         return ApiResponse.success(restaurantService.create(request));
     }
 
     @PutMapping("/{id}")
-    public ApiResponse<RestaurantResponse> update(
+    public ApiResponse<CuaHangVo> update(
             @PathVariable UUID id,
-            @Valid @RequestBody RestaurantUpdateRequest request
+            @Valid @RequestBody CuaHangUpdateDto request
     ) {
         return ApiResponse.success(restaurantService.update(id, request));
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<RestaurantResponse> getDetail(@PathVariable UUID id) {
+    public ApiResponse<CuaHangVo> getDetail(@PathVariable UUID id) {
         return ApiResponse.success(restaurantService.getDetail(id));
     }
 
@@ -51,11 +53,13 @@ public class RestaurantController {
     }
 
     @GetMapping
-    public ApiResponse<PageResponse<RestaurantResponse>> search(
+    public ApiResponse<PageResponse<CuaHangVo>> search(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) MenuCategory loaiCuaHang,
+            @RequestParam(required = false) MenuDetail loaiKinhDoanh,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        return ApiResponse.success(restaurantService.search(keyword, page, size));
+        return ApiResponse.success(restaurantService.search(keyword, loaiCuaHang, loaiKinhDoanh, page, size));
     }
 }

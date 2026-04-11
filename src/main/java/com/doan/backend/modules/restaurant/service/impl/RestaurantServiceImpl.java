@@ -1,15 +1,22 @@
 package com.doan.backend.modules.restaurant.service.impl;
 
 import com.doan.backend.common.dto.PageResponse;
+import com.doan.backend.common.enums.MenuCategory;
+import com.doan.backend.common.enums.MenuDetail;
 import com.doan.backend.common.exception.BadRequestException;
 import com.doan.backend.common.exception.ResourceNotFoundException;
-import com.doan.backend.modules.restaurant.dto.request.RestaurantCreateRequest;
-import com.doan.backend.modules.restaurant.dto.request.RestaurantUpdateRequest;
-import com.doan.backend.modules.restaurant.dto.response.RestaurantResponse;
+import com.doan.backend.common.util.DateTimeUtils;
+import com.doan.backend.modules.restaurant.dto.request.CuaHangCreateDto;
+import com.doan.backend.modules.restaurant.dto.request.CuaHangUpdateDto;
+import com.doan.backend.modules.restaurant.entity.Restaurant;
 import com.doan.backend.modules.restaurant.entity.RestaurantStoreView;
+import com.doan.backend.modules.restaurant.repository.RestaurantRepository;
 import com.doan.backend.modules.restaurant.repository.RestaurantStoreViewRepository;
 import com.doan.backend.modules.restaurant.service.RestaurantService;
 import com.doan.backend.modules.restaurant.specification.RestaurantStoreViewSpecification;
+import com.doan.backend.modules.restaurant.vo.CuaHangVo;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -21,22 +28,29 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class RestaurantServiceImpl implements RestaurantService {
 
-    private static final String READ_ONLY_MESSAGE = "Che do XAMPP tam thoi chi ho tro doc danh sach quan an";
-
+    private final RestaurantRepository restaurantRepository;
     private final RestaurantStoreViewRepository restaurantStoreViewRepository;
 
     @Override
-    public RestaurantResponse create(RestaurantCreateRequest request) {
-        throw new BadRequestException(READ_ONLY_MESSAGE);
+    public CuaHangVo create(CuaHangCreateDto request) {
+        Restaurant entity = new Restaurant();
+        applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
+                request.getMoTa(), request.getHinhAnh(), request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
+        return mapToResponse(restaurantRepository.save(entity));
     }
 
     @Override
-    public RestaurantResponse update(UUID id, RestaurantUpdateRequest request) {
-        throw new BadRequestException(READ_ONLY_MESSAGE);
+    public CuaHangVo update(UUID id, CuaHangUpdateDto request) {
+        Restaurant entity = restaurantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
+        applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
+                request.getMoTa(), request.getHinhAnh(), request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
+        entity.setStatus(request.getTrangThai());
+        return mapToResponse(restaurantRepository.save(entity));
     }
 
     @Override
-    public RestaurantResponse getDetail(UUID id) {
+    public CuaHangVo getDetail(UUID id) {
         return restaurantStoreViewRepository.findById(id)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
@@ -44,28 +58,87 @@ public class RestaurantServiceImpl implements RestaurantService {
 
     @Override
     public void delete(UUID id) {
-        throw new BadRequestException(READ_ONLY_MESSAGE);
+        Restaurant entity = restaurantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
+        restaurantRepository.delete(entity);
     }
 
     @Override
-    public PageResponse<RestaurantResponse> search(String keyword, int page, int size) {
+    public PageResponse<CuaHangVo> search(String keyword, int page, int size) {
+        return search(keyword, null, null, page, size);
+    }
+
+    @Override
+    public PageResponse<CuaHangVo> search(
+            String keyword,
+            MenuCategory loaiCuaHang,
+            MenuDetail loaiKinhDoanh,
+            int page,
+            int size
+    ) {
         Page<RestaurantStoreView> result = restaurantStoreViewRepository.findAll(
-                RestaurantStoreViewSpecification.activeKeyword(keyword),
+                RestaurantStoreViewSpecification.filter(keyword, loaiCuaHang, loaiKinhDoanh),
                 PageRequest.of(page, size));
-        List<RestaurantResponse> items = result.getContent().stream().map(this::mapToResponse).toList();
+        List<CuaHangVo> items = result.getContent().stream().map(this::mapToResponse).toList();
         return PageResponse.from(result, items);
     }
 
-    private RestaurantResponse mapToResponse(RestaurantStoreView entity) {
-        return RestaurantResponse.builder()
+    private void applyRequest(
+            Restaurant entity,
+            String name,
+            String address,
+            String openTime,
+            String closeTime,
+            String description,
+            String imageUrl,
+            MenuCategory loaiCuaHang,
+            MenuDetail loaiKinhDoanh
+    ) {
+        entity.setName(name);
+        entity.setAddress(address);
+        entity.setOpenTime(parseTime(openTime, "gioMoCua"));
+        entity.setCloseTime(parseTime(closeTime, "gioDongCua"));
+        entity.setDescription(description);
+        entity.setImageUrl(imageUrl);
+        entity.setLoaiCuaHang(loaiCuaHang == null ? null : loaiCuaHang.name());
+        entity.setLoaiKinhDoanh(loaiKinhDoanh == null ? null : loaiKinhDoanh.name());
+    }
+
+    private LocalTime parseTime(String value, String fieldName) {
+        try {
+            return DateTimeUtils.parseTime(value);
+        } catch (DateTimeParseException ex) {
+            throw new BadRequestException(fieldName + " phai dung dinh dang HH:mm");
+        }
+    }
+
+    private CuaHangVo mapToResponse(RestaurantStoreView entity) {
+        return CuaHangVo.builder()
                 .id(entity.getId())
-                .name(entity.getName())
-                .address(entity.getAddress())
-                .openTime(entity.getOpenTime() == null ? null : entity.getOpenTime().toString())
-                .closeTime(entity.getCloseTime() == null ? null : entity.getCloseTime().toString())
-                .description(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
-                .imageUrl(entity.getImageUrl())
-                .status(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
+                .tenQuanAn(entity.getName())
+                .diaChi(entity.getAddress())
+                .gioMoCua(entity.getOpenTime() == null ? null : entity.getOpenTime().toString())
+                .gioDongCua(entity.getCloseTime() == null ? null : entity.getCloseTime().toString())
+                .moTa(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
+                .hinhAnh(entity.getImageUrl())
+                .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
+                .loaiCuaHang(entity.getLoaiCuaHang())
+                .loaiKinhDoanh(entity.getLoaiKinhDoanh())
+                .build();
+    }
+
+    private CuaHangVo mapToResponse(Restaurant entity) {
+        return CuaHangVo.builder()
+                .id(entity.getId())
+                .tenQuanAn(entity.getName())
+                .diaChi(entity.getAddress())
+                .gioMoCua(entity.getOpenTime() == null ? null : entity.getOpenTime().toString())
+                .gioDongCua(entity.getCloseTime() == null ? null : entity.getCloseTime().toString())
+                .moTa(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
+                .hinhAnh(entity.getImageUrl())
+                .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
+                .loaiCuaHang(entity.getLoaiCuaHang())
+                .loaiKinhDoanh(entity.getLoaiKinhDoanh())
                 .build();
     }
 }

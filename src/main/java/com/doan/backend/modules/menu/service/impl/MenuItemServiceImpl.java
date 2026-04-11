@@ -2,13 +2,13 @@ package com.doan.backend.modules.menu.service.impl;
 
 import com.doan.backend.common.dto.PageResponse;
 import com.doan.backend.common.exception.ResourceNotFoundException;
-import com.doan.backend.modules.menu.dto.request.MenuItemCreateRequest;
-import com.doan.backend.modules.menu.dto.request.MenuItemUpdateRequest;
-import com.doan.backend.modules.menu.dto.response.MenuItemResponse;
+import com.doan.backend.modules.menu.dto.request.MonAnCreateDto;
+import com.doan.backend.modules.menu.dto.request.MonAnUpdateDto;
 import com.doan.backend.modules.menu.entity.MenuItem;
 import com.doan.backend.modules.menu.repository.MenuItemRepository;
 import com.doan.backend.modules.menu.service.MenuItemService;
 import com.doan.backend.modules.menu.specification.MenuItemSpecification;
+import com.doan.backend.modules.menu.vo.MonAnVo;
 import com.doan.backend.modules.restaurant.entity.Restaurant;
 import com.doan.backend.modules.restaurant.repository.RestaurantRepository;
 import java.math.BigDecimal;
@@ -27,27 +27,35 @@ public class MenuItemServiceImpl implements MenuItemService {
     private final RestaurantRepository restaurantRepository;
 
     @Override
-    public MenuItemResponse create(MenuItemCreateRequest request) {
-        Restaurant restaurant = restaurantRepository.findById(request.getRestaurantId())
+    public MonAnVo create(MonAnCreateDto request) {
+        return create(request.getIdCuaHang(), request);
+    }
+
+    @Override
+    public MonAnVo create(UUID restaurantId, MonAnCreateDto request) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
         MenuItem entity = new MenuItem();
         entity.setRestaurant(restaurant);
-        applyRequest(entity, request.getName(), request.getPrice(), request.getFlavor(), request.getDescription(),
-                request.getImageUrl(), request.getAvailable());
+        applyRequest(entity, request.getTenMonAn(), request.getGiaTien(), request.getNguyenLieuChinh(), request.getMoTa(),
+                request.getHinhAnh(), request.getConBan());
         return mapToResponse(menuItemRepository.save(entity));
     }
 
     @Override
-    public MenuItemResponse update(UUID id, MenuItemUpdateRequest request) {
+    public MonAnVo update(UUID id, MonAnUpdateDto request) {
         MenuItem entity = menuItemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay mon an"));
-        applyRequest(entity, request.getName(), request.getPrice(), request.getFlavor(), request.getDescription(),
-                request.getImageUrl(), request.getAvailable());
+        Restaurant restaurant = restaurantRepository.findById(request.getIdCuaHang())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
+        entity.setRestaurant(restaurant);
+        applyRequest(entity, request.getTenMonAn(), request.getGiaTien(), request.getNguyenLieuChinh(), request.getMoTa(),
+                request.getHinhAnh(), request.getConBan());
         return mapToResponse(menuItemRepository.save(entity));
     }
 
     @Override
-    public MenuItemResponse getDetail(UUID id) {
+    public MonAnVo getDetail(UUID id) {
         return menuItemRepository.findById(id)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay mon an"));
@@ -61,23 +69,23 @@ public class MenuItemServiceImpl implements MenuItemService {
     }
 
     @Override
-    public PageResponse<MenuItemResponse> search(
+    public PageResponse<MonAnVo> search(
             String keyword,
-            String flavor,
+            String nguyenLieuChinh,
             BigDecimal minPrice,
             BigDecimal maxPrice,
             int page,
             int size
     ) {
         Page<MenuItem> result = menuItemRepository.findAll(
-                MenuItemSpecification.filter(keyword, flavor, minPrice, maxPrice),
+                MenuItemSpecification.filter(keyword, nguyenLieuChinh, minPrice, maxPrice),
                 PageRequest.of(page, size));
-        List<MenuItemResponse> items = result.getContent().stream().map(this::mapToResponse).toList();
+        List<MonAnVo> items = result.getContent().stream().map(this::mapToResponse).toList();
         return PageResponse.from(result, items);
     }
 
     @Override
-    public List<MenuItemResponse> findByRestaurant(UUID restaurantId) {
+    public List<MonAnVo> findByRestaurant(UUID restaurantId) {
         return menuItemRepository.findByRestaurantId(restaurantId).stream().map(this::mapToResponse).toList();
     }
 
@@ -85,31 +93,31 @@ public class MenuItemServiceImpl implements MenuItemService {
             MenuItem entity,
             String name,
             BigDecimal price,
-            String flavor,
+            String mainIngredient,
             String description,
             String imageUrl,
             Boolean available
     ) {
         entity.setName(name);
         entity.setPrice(price);
-        entity.setFlavor(flavor);
+        entity.setFlavor(mainIngredient);
         entity.setDescription(description);
         entity.setImageUrl(imageUrl);
         entity.setAvailable(available == null ? Boolean.TRUE : available);
     }
 
-    private MenuItemResponse mapToResponse(MenuItem entity) {
+    private MonAnVo mapToResponse(MenuItem entity) {
         Restaurant restaurant = entity.getRestaurant();
-        return MenuItemResponse.builder()
+        return MonAnVo.builder()
                 .id(entity.getId())
-                .restaurantId(restaurant == null ? null : restaurant.getId())
-                .restaurantName(restaurant == null ? null : restaurant.getName())
-                .name(entity.getName())
-                .price(entity.getPrice())
-                .flavor(entity.getFlavor())
-                .description(entity.getDescription())
-                .imageUrl(entity.getImageUrl())
-                .available(entity.getAvailable() == null ? Boolean.TRUE : entity.getAvailable())
+                .idCuaHang(restaurant == null ? null : restaurant.getId())
+                .tenCuaHang(restaurant == null ? null : restaurant.getName())
+                .tenMonAn(entity.getName())
+                .giaTien(entity.getPrice())
+                .nguyenLieuChinh(entity.getFlavor())
+                .moTa(entity.getDescription())
+                .hinhAnh(entity.getImageUrl())
+                .conBan(entity.getAvailable() == null ? Boolean.TRUE : entity.getAvailable())
                 .build();
     }
 }

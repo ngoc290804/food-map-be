@@ -1,6 +1,7 @@
 package com.doan.backend.modules.restaurant.entity;
 
 import com.doan.backend.common.base.BaseEntity;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -12,23 +13,30 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "cua_hang")
+@Table(name = "tblquanan")
+@AttributeOverride(name = "createdAt", column = @Column(name = "ngaytao", updatable = false))
 public class RestaurantStoreView extends BaseEntity {
 
-    @Column(name = "ten_quan_an", nullable = false, length = 255)
+    @Column(name = "tenquanan", nullable = false, length = 200)
     private String name;
 
-    @Column(name = "dia_chi", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "diachi", nullable = false, columnDefinition = "TEXT")
     private String address;
 
-    @Column(name = "gio_mo_cua")
+    @Column(name = "giomocua")
     private LocalTime openTime;
 
-    @Column(name = "gio_dong_cua")
+    @Column(name = "giodongcua")
     private LocalTime closeTime;
 
-    @Column(name = "mo_ta", columnDefinition = "TEXT")
+    @Column(name = "mota", columnDefinition = "TEXT")
     private String description;
+
+    @Column(name = "loaicuahang", length = 100)
+    private String loaiCuaHang;
+
+    @Column(name = "loaikinhdoanh", length = 100)
+    private String loaiKinhDoanh;
 
     @Transient
     private String imageUrl;

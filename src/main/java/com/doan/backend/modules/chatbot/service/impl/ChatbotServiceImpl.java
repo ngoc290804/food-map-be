@@ -24,7 +24,7 @@ public class ChatbotServiceImpl implements ChatbotService {
 
         return ChatbotResponse.builder()
                 .answer(answer)
-                .restaurants(matches)
+                .cuaHangs(matches)
                 .build();
     }
 

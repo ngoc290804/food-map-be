@@ -1,24 +1,26 @@
 package com.doan.backend.modules.menu.service;
 
 import com.doan.backend.common.dto.PageResponse;
-import com.doan.backend.modules.menu.dto.request.MenuItemCreateRequest;
-import com.doan.backend.modules.menu.dto.request.MenuItemUpdateRequest;
-import com.doan.backend.modules.menu.dto.response.MenuItemResponse;
+import com.doan.backend.modules.menu.dto.request.MonAnCreateDto;
+import com.doan.backend.modules.menu.dto.request.MonAnUpdateDto;
+import com.doan.backend.modules.menu.vo.MonAnVo;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
 public interface MenuItemService {
-    MenuItemResponse create(MenuItemCreateRequest request);
+    MonAnVo create(MonAnCreateDto request);
 
-    MenuItemResponse update(UUID id, MenuItemUpdateRequest request);
+    MonAnVo create(UUID restaurantId, MonAnCreateDto request);
 
-    MenuItemResponse getDetail(UUID id);
+    MonAnVo update(UUID id, MonAnUpdateDto request);
+
+    MonAnVo getDetail(UUID id);
 
     void delete(UUID id);
 
-    PageResponse<MenuItemResponse> search(String keyword, String flavor, BigDecimal minPrice, BigDecimal maxPrice,
-                                          int page, int size);
+    PageResponse<MonAnVo> search(String keyword, String nguyenLieuChinh, BigDecimal minPrice, BigDecimal maxPrice,
+                                 int page, int size);
 
-    List<MenuItemResponse> findByRestaurant(UUID restaurantId);
+    List<MonAnVo> findByRestaurant(UUID restaurantId);
 }

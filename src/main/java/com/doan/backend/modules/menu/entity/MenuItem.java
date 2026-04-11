@@ -2,6 +2,7 @@ package com.doan.backend.modules.menu.entity;
 
 import com.doan.backend.common.base.BaseEntity;
 import com.doan.backend.modules.restaurant.entity.Restaurant;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -18,24 +19,25 @@ import org.hibernate.annotations.NotFoundAction;
 @Getter
 @Setter
 @Entity
-@Table(name = "mon_an")
+@Table(name = "tblmenu")
+@AttributeOverride(name = "createdAt", column = @Column(name = "ngaytao", updatable = false))
 public class MenuItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cua_hang_id")
+    @JoinColumn(name = "idcuahang")
     @NotFound(action = NotFoundAction.IGNORE)
     private Restaurant restaurant;
 
-    @Column(name = "ten_mon_an", nullable = false, length = 255)
+    @Column(name = "tenmonan", nullable = false, length = 200)
     private String name;
 
-    @Column(name = "gia", nullable = false, precision = 12, scale = 2)
+    @Column(name = "giatien", nullable = false, precision = 12, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "huong_vi", length = 100)
+    @Column(name = "nguyenlieuchinh", columnDefinition = "TEXT")
     private String flavor;
 
-    @Column(name = "mo_ta", columnDefinition = "TEXT")
+    @Column(name = "mota", columnDefinition = "TEXT")
     private String description;
 
     @Transient
