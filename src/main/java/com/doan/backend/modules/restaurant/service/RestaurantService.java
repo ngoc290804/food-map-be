@@ -7,11 +7,16 @@ import com.doan.backend.modules.restaurant.dto.request.CuaHangCreateDto;
 import com.doan.backend.modules.restaurant.dto.request.CuaHangUpdateDto;
 import com.doan.backend.modules.restaurant.vo.CuaHangVo;
 import java.util.UUID;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface RestaurantService {
     CuaHangVo create(CuaHangCreateDto request);
 
+    CuaHangVo create(CuaHangCreateDto request, MultipartFile image);
+
     CuaHangVo update(UUID id, CuaHangUpdateDto request);
+
+    CuaHangVo update(UUID id, CuaHangUpdateDto request, MultipartFile image);
 
     CuaHangVo getDetail(UUID id);
 

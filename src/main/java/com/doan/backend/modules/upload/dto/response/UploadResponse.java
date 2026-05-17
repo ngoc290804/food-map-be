@@ -8,4 +8,5 @@ import lombok.Getter;
 public class UploadResponse {
     private final String fileName;
     private final String url;
+    private final String publicId;
 }

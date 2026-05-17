@@ -35,6 +35,8 @@ public class MonAnUpdateDto {
     @JsonAlias("imageUrl")
     private String hinhAnh;
 
+    private String imagePublicId;
+
     @JsonAlias("available")
     private Boolean conBan;
 }

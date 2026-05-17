@@ -41,6 +41,11 @@ app:
       expiration: ${JWT_EXPIRATION:86400000}
   upload:
     dir: ${UPLOAD_DIR:uploads}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:dmwfkj9y4}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    folder: ${CLOUDINARY_FOLDER:food-map}
 
 logging:
   level:

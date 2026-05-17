@@ -15,6 +15,8 @@ import com.doan.backend.modules.restaurant.repository.RestaurantStoreViewReposit
 import com.doan.backend.modules.restaurant.service.RestaurantService;
 import com.doan.backend.modules.restaurant.specification.RestaurantStoreViewSpecification;
 import com.doan.backend.modules.restaurant.vo.CuaHangVo;
+import com.doan.backend.modules.upload.dto.response.UploadResponse;
+import com.doan.backend.modules.upload.service.UploadService;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -23,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -30,13 +33,21 @@ public class RestaurantServiceImpl implements RestaurantService {
 
     private final RestaurantRepository restaurantRepository;
     private final RestaurantStoreViewRepository restaurantStoreViewRepository;
+    private final UploadService uploadService;
 
     @Override
     public CuaHangVo create(CuaHangCreateDto request) {
         Restaurant entity = new Restaurant();
         applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
-                request.getMoTa(), request.getHinhAnh(), request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
+                request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLoaiCuaHang(),
+                request.getLoaiKinhDoanh());
         return mapToResponse(restaurantRepository.save(entity));
+    }
+
+    @Override
+    public CuaHangVo create(CuaHangCreateDto request, MultipartFile image) {
+        applyImageIfPresent(request, image);
+        return create(request);
     }
 
     @Override
@@ -44,9 +55,16 @@ public class RestaurantServiceImpl implements RestaurantService {
         Restaurant entity = restaurantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
         applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
-                request.getMoTa(), request.getHinhAnh(), request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
+                request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLoaiCuaHang(),
+                request.getLoaiKinhDoanh());
         entity.setStatus(request.getTrangThai());
         return mapToResponse(restaurantRepository.save(entity));
+    }
+
+    @Override
+    public CuaHangVo update(UUID id, CuaHangUpdateDto request, MultipartFile image) {
+        applyImageIfPresent(request, image);
+        return update(id, request);
     }
 
     @Override
@@ -91,6 +109,7 @@ public class RestaurantServiceImpl implements RestaurantService {
             String closeTime,
             String description,
             String imageUrl,
+            String imagePublicId,
             MenuCategory loaiCuaHang,
             MenuDetail loaiKinhDoanh
     ) {
@@ -100,6 +119,7 @@ public class RestaurantServiceImpl implements RestaurantService {
         entity.setCloseTime(parseTime(closeTime, "gioDongCua"));
         entity.setDescription(description);
         entity.setImageUrl(imageUrl);
+        entity.setImagePublicId(imagePublicId);
         entity.setLoaiCuaHang(loaiCuaHang == null ? null : loaiCuaHang.name());
         entity.setLoaiKinhDoanh(loaiKinhDoanh == null ? null : loaiKinhDoanh.name());
     }
@@ -112,6 +132,24 @@ public class RestaurantServiceImpl implements RestaurantService {
         }
     }
 
+    private void applyImageIfPresent(CuaHangCreateDto request, MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            return;
+        }
+        UploadResponse uploadedImage = uploadService.uploadImage(image);
+        request.setHinhAnh(uploadedImage.getUrl());
+        request.setImagePublicId(uploadedImage.getPublicId());
+    }
+
+    private void applyImageIfPresent(CuaHangUpdateDto request, MultipartFile image) {
+        if (image == null || image.isEmpty()) {
+            return;
+        }
+        UploadResponse uploadedImage = uploadService.uploadImage(image);
+        request.setHinhAnh(uploadedImage.getUrl());
+        request.setImagePublicId(uploadedImage.getPublicId());
+    }
+
     private CuaHangVo mapToResponse(RestaurantStoreView entity) {
         return CuaHangVo.builder()
                 .id(entity.getId())
@@ -121,6 +159,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .gioDongCua(entity.getCloseTime() == null ? null : entity.getCloseTime().toString())
                 .moTa(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
                 .hinhAnh(entity.getImageUrl())
+                .imagePublicId(entity.getImagePublicId())
                 .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
                 .loaiCuaHang(entity.getLoaiCuaHang())
                 .loaiKinhDoanh(entity.getLoaiKinhDoanh())
@@ -136,6 +175,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .gioDongCua(entity.getCloseTime() == null ? null : entity.getCloseTime().toString())
                 .moTa(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
                 .hinhAnh(entity.getImageUrl())
+                .imagePublicId(entity.getImagePublicId())
                 .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
                 .loaiCuaHang(entity.getLoaiCuaHang())
                 .loaiKinhDoanh(entity.getLoaiKinhDoanh())

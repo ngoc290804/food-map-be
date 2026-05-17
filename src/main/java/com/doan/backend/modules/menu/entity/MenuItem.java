@@ -40,8 +40,11 @@ public class MenuItem extends BaseEntity {
     @Column(name = "mota", columnDefinition = "TEXT")
     private String description;
 
-    @Transient
+    @Column(name = "hinhanh", length = 1000)
     private String imageUrl;
+
+    @Column(name = "image_public_id", length = 255)
+    private String imagePublicId;
 
     @Transient
     private Boolean available;

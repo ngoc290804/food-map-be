@@ -38,7 +38,7 @@ public class MenuItemServiceImpl implements MenuItemService {
         MenuItem entity = new MenuItem();
         entity.setRestaurant(restaurant);
         applyRequest(entity, request.getTenMonAn(), request.getGiaTien(), request.getNguyenLieuChinh(), request.getMoTa(),
-                request.getHinhAnh(), request.getConBan());
+                request.getHinhAnh(), request.getImagePublicId(), request.getConBan());
         return mapToResponse(menuItemRepository.save(entity));
     }
 
@@ -50,7 +50,7 @@ public class MenuItemServiceImpl implements MenuItemService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
         entity.setRestaurant(restaurant);
         applyRequest(entity, request.getTenMonAn(), request.getGiaTien(), request.getNguyenLieuChinh(), request.getMoTa(),
-                request.getHinhAnh(), request.getConBan());
+                request.getHinhAnh(), request.getImagePublicId(), request.getConBan());
         return mapToResponse(menuItemRepository.save(entity));
     }
 
@@ -96,6 +96,7 @@ public class MenuItemServiceImpl implements MenuItemService {
             String mainIngredient,
             String description,
             String imageUrl,
+            String imagePublicId,
             Boolean available
     ) {
         entity.setName(name);
@@ -103,6 +104,7 @@ public class MenuItemServiceImpl implements MenuItemService {
         entity.setFlavor(mainIngredient);
         entity.setDescription(description);
         entity.setImageUrl(imageUrl);
+        entity.setImagePublicId(imagePublicId);
         entity.setAvailable(available == null ? Boolean.TRUE : available);
     }
 
@@ -117,6 +119,7 @@ public class MenuItemServiceImpl implements MenuItemService {
                 .nguyenLieuChinh(entity.getFlavor())
                 .moTa(entity.getDescription())
                 .hinhAnh(entity.getImageUrl())
+                .imagePublicId(entity.getImagePublicId())
                 .conBan(entity.getAvailable() == null ? Boolean.TRUE : entity.getAvailable())
                 .build();
     }

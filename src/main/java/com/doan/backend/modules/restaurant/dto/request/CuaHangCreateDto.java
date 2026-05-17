@@ -36,6 +36,8 @@ public class CuaHangCreateDto {
     @JsonAlias("imageUrl")
     private String hinhAnh;
 
+    private String imagePublicId;
+
     @NotNull(message = "loaiCuaHang khong duoc de trong")
     private MenuCategory loaiCuaHang;
 

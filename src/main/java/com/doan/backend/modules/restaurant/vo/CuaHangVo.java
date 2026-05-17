@@ -14,6 +14,7 @@ public class CuaHangVo {
     private final String gioDongCua;
     private final String moTa;
     private final String hinhAnh;
+    private final String imagePublicId;
     private final String trangThai;
     private final String loaiCuaHang;
     private final String loaiKinhDoanh;

@@ -16,5 +16,6 @@ public class MonAnVo {
     private final String nguyenLieuChinh;
     private final String moTa;
     private final String hinhAnh;
+    private final String imagePublicId;
     private final Boolean conBan;
 }

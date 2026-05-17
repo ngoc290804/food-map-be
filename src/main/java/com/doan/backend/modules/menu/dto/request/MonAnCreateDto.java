@@ -35,6 +35,8 @@ public class MonAnCreateDto {
     @JsonAlias("imageUrl")
     private String hinhAnh;
 
+    private String imagePublicId;
+
     @JsonAlias("available")
     private Boolean conBan;
 }

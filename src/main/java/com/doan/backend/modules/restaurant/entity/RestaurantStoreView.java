@@ -38,8 +38,11 @@ public class RestaurantStoreView extends BaseEntity {
     @Column(name = "loaikinhdoanh", length = 100)
     private String loaiKinhDoanh;
 
-    @Transient
+    @Column(name = "hinhanh", length = 1000)
     private String imageUrl;
+
+    @Column(name = "image_public_id", length = 255)
+    private String imagePublicId;
 
     @Transient
     private String status;
