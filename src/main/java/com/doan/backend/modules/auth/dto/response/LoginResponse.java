@@ -1,7 +1,5 @@
 package com.doan.backend.modules.auth.dto.response;
 
-import java.util.Set;
-import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -10,8 +8,5 @@ import lombok.Getter;
 public class LoginResponse {
     private final String accessToken;
     private final String tokenType;
-    private final UUID userId;
-    private final String username;
-    private final String fullName;
-    private final Set<String> roles;
+    private final UserInfoResponse user;
 }

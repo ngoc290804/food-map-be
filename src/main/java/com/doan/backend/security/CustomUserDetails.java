@@ -3,6 +3,7 @@ package com.doan.backend.security;
 import com.doan.backend.modules.user.entity.Role;
 import com.doan.backend.modules.user.entity.User;
 import java.util.Collection;
+import java.util.stream.Stream;
 import java.util.UUID;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -21,8 +22,10 @@ public class CustomUserDetails implements UserDetails {
         this.id = user.getId();
         this.username = user.getUsername();
         this.password = user.getPassword();
-        this.authorities = user.getRoles().stream()
-                .map(Role::getCode)
+        Stream<String> roleCodes = user.getRoles().isEmpty() && user.getRoleCode() != null
+                ? Stream.of(user.getRoleCode())
+                : user.getRoles().stream().map(Role::getCode);
+        this.authorities = roleCodes
                 .map(SimpleGrantedAuthority::new)
                 .toList();
     }

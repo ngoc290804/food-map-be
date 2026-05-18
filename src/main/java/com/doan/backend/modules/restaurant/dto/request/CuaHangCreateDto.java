@@ -3,6 +3,7 @@ package com.doan.backend.modules.restaurant.dto.request;
 import com.doan.backend.common.enums.MenuCategory;
 import com.doan.backend.common.enums.MenuDetail;
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,6 +12,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CuaHangCreateDto {
 
     @JsonAlias("name")

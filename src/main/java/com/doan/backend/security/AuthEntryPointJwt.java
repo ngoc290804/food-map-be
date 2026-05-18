@@ -26,6 +26,6 @@ public class AuthEntryPointJwt implements AuthenticationEntryPoint {
     ) throws IOException, ServletException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getOutputStream(), ApiResponse.error("Unauthorized"));
+        objectMapper.writeValue(response.getOutputStream(), ApiResponse.error("Bạn cần đăng nhập để thực hiện thao tác này"));
     }
 }

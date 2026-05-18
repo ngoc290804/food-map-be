@@ -7,7 +7,7 @@ import lombok.Getter;
 
 @Getter
 @Builder
-public class ProfileResponse {
+public class UserInfoResponse {
     private final UUID id;
     private final String username;
     private final String email;

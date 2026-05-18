@@ -6,6 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -43,6 +44,12 @@ public class Restaurant extends BaseEntity {
 
     @Column(name = "image_public_id", length = 255)
     private String imagePublicId;
+
+    @Column(name = "latitude", precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 7)
+    private BigDecimal longitude;
 
     @Transient
     private String status;

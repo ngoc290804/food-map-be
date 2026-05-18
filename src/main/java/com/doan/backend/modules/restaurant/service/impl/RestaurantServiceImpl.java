@@ -12,11 +12,13 @@ import com.doan.backend.modules.restaurant.entity.Restaurant;
 import com.doan.backend.modules.restaurant.entity.RestaurantStoreView;
 import com.doan.backend.modules.restaurant.repository.RestaurantRepository;
 import com.doan.backend.modules.restaurant.repository.RestaurantStoreViewRepository;
+import com.doan.backend.modules.restaurant.service.GeocodingService;
 import com.doan.backend.modules.restaurant.service.RestaurantService;
 import com.doan.backend.modules.restaurant.specification.RestaurantStoreViewSpecification;
 import com.doan.backend.modules.restaurant.vo.CuaHangVo;
 import com.doan.backend.modules.upload.dto.response.UploadResponse;
 import com.doan.backend.modules.upload.service.UploadService;
+import java.util.Objects;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,6 +37,7 @@ public class RestaurantServiceImpl implements RestaurantService {
     private final RestaurantRepository restaurantRepository;
     private final RestaurantStoreViewRepository restaurantStoreViewRepository;
     private final UploadService uploadService;
+    private final GeocodingService geocodingService;
 
     @Override
     public CuaHangVo create(CuaHangCreateDto request) {
@@ -96,7 +100,10 @@ public class RestaurantServiceImpl implements RestaurantService {
     ) {
         Page<RestaurantStoreView> result = restaurantStoreViewRepository.findAll(
                 RestaurantStoreViewSpecification.filter(keyword, loaiCuaHang, loaiKinhDoanh),
-                PageRequest.of(page, size));
+                PageRequest.of(page, size, Sort.by(
+                        Sort.Order.desc("createdAt"),
+                        Sort.Order.desc("id")
+                )));
         List<CuaHangVo> items = result.getContent().stream().map(this::mapToResponse).toList();
         return PageResponse.from(result, items);
     }
@@ -113,6 +120,7 @@ public class RestaurantServiceImpl implements RestaurantService {
             MenuCategory loaiCuaHang,
             MenuDetail loaiKinhDoanh
     ) {
+        String previousAddress = entity.getAddress();
         entity.setName(name);
         entity.setAddress(address);
         entity.setOpenTime(parseTime(openTime, "gioMoCua"));
@@ -122,6 +130,20 @@ public class RestaurantServiceImpl implements RestaurantService {
         entity.setImagePublicId(imagePublicId);
         entity.setLoaiCuaHang(loaiCuaHang == null ? null : loaiCuaHang.name());
         entity.setLoaiKinhDoanh(loaiKinhDoanh == null ? null : loaiKinhDoanh.name());
+        updateCoordinates(entity, previousAddress, address);
+    }
+
+    private void updateCoordinates(Restaurant entity, String previousAddress, String address) {
+        boolean shouldGeocode = entity.getLatitude() == null
+                || entity.getLongitude() == null
+                || !Objects.equals(previousAddress, address);
+        if (!shouldGeocode) {
+            return;
+        }
+        geocodingService.geocode(address).ifPresent(location -> {
+            entity.setLatitude(location.getLatitude());
+            entity.setLongitude(location.getLongitude());
+        });
     }
 
     private LocalTime parseTime(String value, String fieldName) {
@@ -160,6 +182,8 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .moTa(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
                 .hinhAnh(entity.getImageUrl())
                 .imagePublicId(entity.getImagePublicId())
+                .latitude(entity.getLatitude())
+                .longitude(entity.getLongitude())
                 .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
                 .loaiCuaHang(entity.getLoaiCuaHang())
                 .loaiKinhDoanh(entity.getLoaiKinhDoanh())
@@ -176,6 +200,8 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .moTa(entity.getDescription() == null ? entity.getAddress() : entity.getDescription())
                 .hinhAnh(entity.getImageUrl())
                 .imagePublicId(entity.getImagePublicId())
+                .latitude(entity.getLatitude())
+                .longitude(entity.getLongitude())
                 .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
                 .loaiCuaHang(entity.getLoaiCuaHang())
                 .loaiKinhDoanh(entity.getLoaiKinhDoanh())

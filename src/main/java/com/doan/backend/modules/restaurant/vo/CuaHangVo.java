@@ -1,5 +1,6 @@
 package com.doan.backend.modules.restaurant.vo;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,6 +16,8 @@ public class CuaHangVo {
     private final String moTa;
     private final String hinhAnh;
     private final String imagePublicId;
+    private final BigDecimal latitude;
+    private final BigDecimal longitude;
     private final String trangThai;
     private final String loaiCuaHang;
     private final String loaiKinhDoanh;

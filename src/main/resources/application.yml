@@ -46,6 +46,11 @@ app:
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}
     folder: ${CLOUDINARY_FOLDER:food-map}
+  nominatim:
+    base-url: ${NOMINATIM_BASE_URL:https://nominatim.openstreetmap.org}
+    user-agent: ${NOMINATIM_USER_AGENT:food-map-be/1.0}
+    country-codes: ${NOMINATIM_COUNTRY_CODES:vn}
+    min-interval-millis: ${NOMINATIM_MIN_INTERVAL_MILLIS:1000}
 
 logging:
   level:
