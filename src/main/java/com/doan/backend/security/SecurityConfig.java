@@ -3,6 +3,7 @@ package com.doan.backend.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -42,6 +43,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/api/restaurants", "/api/restaurants/**").permitAll()
                         .requestMatchers("/api/menu-items", "/api/menu-items/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/restaurants/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

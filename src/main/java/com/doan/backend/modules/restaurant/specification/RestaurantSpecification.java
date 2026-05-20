@@ -10,14 +10,15 @@ public final class RestaurantSpecification {
 
     public static Specification<Restaurant> keyword(String keyword) {
         return (root, query, builder) -> {
+            var predicate = builder.equal(builder.coalesce(root.get("danhDauXoa"), 0), 0);
             if (keyword == null || keyword.isBlank()) {
-                return builder.conjunction();
+                return predicate;
             }
             String likeValue = "%" + keyword.trim().toLowerCase() + "%";
-            return builder.or(
+            return builder.and(predicate, builder.or(
                     builder.like(builder.lower(root.get("name")), likeValue),
                     builder.like(builder.lower(root.get("address")), likeValue)
-            );
+            ));
         };
     }
 }

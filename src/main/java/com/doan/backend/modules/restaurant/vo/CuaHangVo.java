@@ -18,6 +18,9 @@ public class CuaHangVo {
     private final String imagePublicId;
     private final BigDecimal latitude;
     private final BigDecimal longitude;
+    private final Boolean yeuThich;
+    private final BigDecimal diemDanhGiaTrungBinh;
+    private final long soLuongDanhGia;
     private final String trangThai;
     private final String loaiCuaHang;
     private final String loaiKinhDoanh;

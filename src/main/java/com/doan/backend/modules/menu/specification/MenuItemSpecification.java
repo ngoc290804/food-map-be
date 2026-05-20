@@ -12,6 +12,8 @@ public final class MenuItemSpecification {
     public static Specification<MenuItem> filter(String keyword, String flavor, BigDecimal minPrice, BigDecimal maxPrice) {
         return (root, query, builder) -> {
             var predicate = builder.conjunction();
+            var restaurant = root.join("restaurant");
+            predicate = builder.and(predicate, builder.equal(builder.coalesce(restaurant.get("danhDauXoa"), 0), 0));
             if (keyword != null && !keyword.isBlank()) {
                 String likeValue = "%" + keyword.trim().toLowerCase() + "%";
                 predicate = builder.and(predicate, builder.or(

@@ -34,17 +34,22 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse register(RegisterRequest request) {
+        if (request.getConfirmPassword() != null && !request.getPassword().equals(request.getConfirmPassword())) {
+            throw new BadRequestException("Mật khẩu xác nhận không khớp");
+        }
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new BadRequestException("Username da ton tai");
+            throw new BadRequestException("Tên đăng nhập đã tồn tại");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Email da ton tai");
+            throw new BadRequestException("Email đã tồn tại");
         }
 
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
-        user.setFullName(request.getFullName());
+        user.setFullName(request.getFullName() == null || request.getFullName().isBlank()
+                ? request.getUsername()
+                : request.getFullName());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setStatus(AppConstants.STATUS_ACTIVE);
         user.setRoleCode("khach");

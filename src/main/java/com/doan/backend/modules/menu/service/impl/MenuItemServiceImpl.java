@@ -33,7 +33,7 @@ public class MenuItemServiceImpl implements MenuItemService {
 
     @Override
     public MonAnVo create(UUID restaurantId, MonAnCreateDto request) {
-        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+        Restaurant restaurant = restaurantRepository.findActiveById(restaurantId)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
         MenuItem entity = new MenuItem();
         entity.setRestaurant(restaurant);
@@ -46,7 +46,7 @@ public class MenuItemServiceImpl implements MenuItemService {
     public MonAnVo update(UUID id, MonAnUpdateDto request) {
         MenuItem entity = menuItemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay mon an"));
-        Restaurant restaurant = restaurantRepository.findById(request.getIdCuaHang())
+        Restaurant restaurant = restaurantRepository.findActiveById(request.getIdCuaHang())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
         entity.setRestaurant(restaurant);
         applyRequest(entity, request.getTenMonAn(), request.getGiaTien(), request.getNguyenLieuChinh(), request.getMoTa(),
@@ -57,6 +57,8 @@ public class MenuItemServiceImpl implements MenuItemService {
     @Override
     public MonAnVo getDetail(UUID id) {
         return menuItemRepository.findById(id)
+                .filter(entity -> entity.getRestaurant() == null
+                        || !Integer.valueOf(1).equals(entity.getRestaurant().getDanhDauXoa()))
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay mon an"));
     }
@@ -86,6 +88,9 @@ public class MenuItemServiceImpl implements MenuItemService {
 
     @Override
     public List<MonAnVo> findByRestaurant(UUID restaurantId) {
+        if (!restaurantRepository.existsActiveById(restaurantId)) {
+            throw new ResourceNotFoundException("Khong tim thay quan an");
+        }
         return menuItemRepository.findByRestaurantId(restaurantId).stream().map(this::mapToResponse).toList();
     }
 

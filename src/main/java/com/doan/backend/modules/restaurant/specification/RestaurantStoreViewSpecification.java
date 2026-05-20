@@ -17,6 +17,7 @@ public final class RestaurantStoreViewSpecification {
     ) {
         return (root, query, builder) -> {
             var predicate = builder.conjunction();
+            predicate = builder.and(predicate, builder.equal(builder.coalesce(root.get("danhDauXoa"), 0), 0));
             if (keyword != null && !keyword.isBlank()) {
                 String likeValue = "%" + keyword.trim().toLowerCase() + "%";
                 predicate = builder.and(predicate, builder.or(
