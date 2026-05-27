@@ -1,6 +1,7 @@
 package com.doan.backend.modules.restaurant.repository;
 
 import com.doan.backend.modules.restaurant.entity.RestaurantStoreView;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,4 +14,7 @@ public interface RestaurantStoreViewRepository extends JpaRepository<RestaurantS
 
     @Query("select r from RestaurantStoreView r where r.id = :id and coalesce(r.danhDauXoa, 0) = 0")
     Optional<RestaurantStoreView> findActiveById(@Param("id") UUID id);
+
+    @Query("select r from RestaurantStoreView r where coalesce(r.danhDauXoa, 0) = 0 order by r.createdAt desc, r.id desc")
+    List<RestaurantStoreView> findActiveRestaurants();
 }

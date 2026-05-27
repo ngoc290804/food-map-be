@@ -95,7 +95,11 @@ public class ReviewServiceImpl implements ReviewService {
         UUID userId = getCurrentUserId();
         Review review = reviewRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá"));
+        UUID restaurantId = review.getRestaurant() == null ? null : review.getRestaurant().getId();
         reviewRepository.delete(review);
+        if (restaurantId != null) {
+            restaurantRepository.refreshRating(restaurantId);
+        }
     }
 
     private ReviewVo createReview(UUID restaurantId, String content, Integer rating) {
@@ -110,7 +114,9 @@ public class ReviewServiceImpl implements ReviewService {
         review.setRestaurant(restaurant);
         review.setContent(content);
         review.setRating(rating);
-        return mapToResponse(reviewRepository.save(review));
+        Review savedReview = reviewRepository.save(review);
+        restaurantRepository.refreshRating(restaurantId);
+        return mapToResponse(savedReview);
     }
 
     private void ensureRestaurantExists(UUID restaurantId) {

@@ -41,6 +41,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/api/uploads/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/chatbot/ask").permitAll()
                         .requestMatchers("/api/restaurants", "/api/restaurants/**").permitAll()
                         .requestMatchers("/api/menu-items", "/api/menu-items/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/restaurants/**").permitAll()

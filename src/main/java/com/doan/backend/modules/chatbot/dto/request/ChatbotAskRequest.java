@@ -1,6 +1,7 @@
 package com.doan.backend.modules.chatbot.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -8,6 +9,10 @@ import lombok.Setter;
 @Setter
 public class ChatbotAskRequest {
 
-    @NotBlank(message = "Câu hỏi không được để trống")
+    @NotBlank(message = "Cau hoi khong duoc de trong")
     private String question;
+
+    private BigDecimal latitude;
+
+    private BigDecimal longitude;
 }

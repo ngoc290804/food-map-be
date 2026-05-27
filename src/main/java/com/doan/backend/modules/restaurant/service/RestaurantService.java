@@ -6,6 +6,7 @@ import com.doan.backend.common.enums.MenuDetail;
 import com.doan.backend.modules.restaurant.dto.request.CuaHangCreateDto;
 import com.doan.backend.modules.restaurant.dto.request.CuaHangUpdateDto;
 import com.doan.backend.modules.restaurant.vo.CuaHangVo;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,4 +32,6 @@ public interface RestaurantService {
             int page,
             int size
     );
+
+    List<CuaHangVo> findActiveForChatbot(int limit);
 }

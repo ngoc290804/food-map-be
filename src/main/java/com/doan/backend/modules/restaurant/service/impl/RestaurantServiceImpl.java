@@ -124,6 +124,15 @@ public class RestaurantServiceImpl implements RestaurantService {
         return PageResponse.from(result, items);
     }
 
+    @Override
+    public List<CuaHangVo> findActiveForChatbot(int limit) {
+        int safeLimit = limit <= 0 ? 50 : Math.min(limit, 100);
+        return restaurantStoreViewRepository.findActiveRestaurants().stream()
+                .limit(safeLimit)
+                .map(this::mapToResponse)
+                .toList();
+    }
+
     private PageResponse<CuaHangVo> searchFavorites(
             String keyword,
             MenuDetail loaiKinhDoanh,

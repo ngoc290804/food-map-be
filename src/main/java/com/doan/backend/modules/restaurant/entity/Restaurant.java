@@ -51,6 +51,9 @@ public class Restaurant extends BaseEntity {
     @Column(name = "longitude", precision = 10, scale = 7)
     private BigDecimal longitude;
 
+    @Column(name = "diemdanhgia", precision = 3, scale = 1)
+    private BigDecimal diemDanhGia;
+
     @Column(name = "danhdauxoa")
     private Integer danhDauXoa;
 

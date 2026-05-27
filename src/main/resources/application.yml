@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: do-an-backend
   datasource:
@@ -51,6 +53,11 @@ app:
     user-agent: ${NOMINATIM_USER_AGENT:food-map-be/1.0}
     country-codes: ${NOMINATIM_COUNTRY_CODES:vn}
     min-interval-millis: ${NOMINATIM_MIN_INTERVAL_MILLIS:1000}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    max-restaurants: ${OPENAI_MAX_RESTAURANTS:50}
 
 logging:
   level:
