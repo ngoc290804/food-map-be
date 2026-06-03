@@ -13,5 +13,6 @@ public class UserInfoResponse {
     private final String email;
     private final String fullName;
     private final String status;
+    private final String loaiTaiKhoan;
     private final Set<String> roles;
 }

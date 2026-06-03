@@ -64,6 +64,24 @@ public class RestaurantController {
         return ApiResponse.success(restaurantService.update(id, request, resolveImage(image, file)));
     }
 
+    @GetMapping("/ranking")
+    public ApiResponse<PageResponse<CuaHangVo>> ranking(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ApiResponse.success(restaurantService.ranking(page, size));
+    }
+
+    @GetMapping("/owner/{idTaiKhoan}")
+    public ApiResponse<CuaHangVo> getByOwnerId(@PathVariable UUID idTaiKhoan) {
+        return ApiResponse.success(restaurantService.getByOwnerId(idTaiKhoan));
+    }
+
+    @GetMapping("/mine")
+    public ApiResponse<CuaHangVo> getMyRestaurant() {
+        return ApiResponse.success(restaurantService.getMyRestaurant());
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<CuaHangVo> getDetail(@PathVariable UUID id) {
         return ApiResponse.success(restaurantService.getDetail(id));

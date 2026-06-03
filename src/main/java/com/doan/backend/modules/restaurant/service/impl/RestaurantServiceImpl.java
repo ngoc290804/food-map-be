@@ -1,10 +1,12 @@
 package com.doan.backend.modules.restaurant.service.impl;
 
 import com.doan.backend.common.dto.PageResponse;
+import com.doan.backend.common.enums.AccountType;
 import com.doan.backend.common.enums.MenuCategory;
 import com.doan.backend.common.enums.MenuDetail;
 import com.doan.backend.common.exception.BadRequestException;
 import com.doan.backend.common.exception.ResourceNotFoundException;
+import com.doan.backend.common.exception.UnauthorizedException;
 import com.doan.backend.common.util.DateTimeUtils;
 import com.doan.backend.modules.favorite.entity.Favorite;
 import com.doan.backend.modules.favorite.repository.FavoriteRepository;
@@ -22,6 +24,7 @@ import com.doan.backend.modules.review.service.ReviewService;
 import com.doan.backend.modules.review.vo.ReviewSummaryVo;
 import com.doan.backend.modules.upload.dto.response.UploadResponse;
 import com.doan.backend.modules.upload.service.UploadService;
+import com.doan.backend.security.CustomUserDetails;
 import com.doan.backend.security.SecurityUtils;
 import java.util.Objects;
 import java.time.LocalTime;
@@ -50,10 +53,30 @@ public class RestaurantServiceImpl implements RestaurantService {
 
     @Override
     public CuaHangVo create(CuaHangCreateDto request) {
+        Optional<CustomUserDetails> currentUser = SecurityUtils.getCurrentUser();
+        if (isStoreAccount(currentUser)) {
+            UUID ownerId = currentUser.map(CustomUserDetails::getId)
+                    .orElseThrow(() -> new UnauthorizedException("Vui long dang nhap de tao cua hang"));
+            Optional<Restaurant> existingRestaurant = restaurantRepository.findByIdChuCuaHang(ownerId);
+            if (existingRestaurant.isPresent()) {
+                Restaurant entity = existingRestaurant.get();
+                applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(),
+                        request.getGioDongCua(), request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(),
+                        request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
+                entity.setIdChuCuaHang(ownerId);
+                entity.setDanhDauXoa(0);
+                return mapToResponse(restaurantRepository.save(entity));
+            }
+        }
+
         Restaurant entity = new Restaurant();
         applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
                 request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLoaiCuaHang(),
                 request.getLoaiKinhDoanh());
+        currentUser
+                .filter(this::isStoreAccount)
+                .map(CustomUserDetails::getId)
+                .ifPresent(entity::setIdChuCuaHang);
         entity.setDanhDauXoa(0);
         return mapToResponse(restaurantRepository.save(entity));
     }
@@ -68,6 +91,7 @@ public class RestaurantServiceImpl implements RestaurantService {
     public CuaHangVo update(UUID id, CuaHangUpdateDto request) {
         Restaurant entity = restaurantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
+        ensureStoreOwnerCanEdit(entity);
         applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
                 request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLoaiCuaHang(),
                 request.getLoaiKinhDoanh());
@@ -90,6 +114,21 @@ public class RestaurantServiceImpl implements RestaurantService {
     }
 
     @Override
+    public CuaHangVo getByOwnerId(UUID idTaiKhoan) {
+        return restaurantStoreViewRepository.findActiveByOwnerId(idTaiKhoan)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay cua hang cua tai khoan nay"));
+    }
+
+    @Override
+    public CuaHangVo getMyRestaurant() {
+        UUID ownerId = SecurityUtils.getCurrentUser()
+                .map(CustomUserDetails::getId)
+                .orElseThrow(() -> new UnauthorizedException("Vui long dang nhap de xem cua hang"));
+        return getByOwnerId(ownerId);
+    }
+
+    @Override
     public void delete(UUID id) {
         Restaurant entity = restaurantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
@@ -100,6 +139,16 @@ public class RestaurantServiceImpl implements RestaurantService {
     @Override
     public PageResponse<CuaHangVo> search(String keyword, int page, int size) {
         return search(keyword, null, null, page, size);
+    }
+
+    @Override
+    public PageResponse<CuaHangVo> ranking(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 10 : Math.min(size, 50);
+        Page<RestaurantStoreView> result = restaurantStoreViewRepository.findRanking(
+                PageRequest.of(safePage, safeSize));
+        List<CuaHangVo> items = result.getContent().stream().map(this::mapToResponse).toList();
+        return PageResponse.from(result, items);
     }
 
     @Override
@@ -188,6 +237,30 @@ public class RestaurantServiceImpl implements RestaurantService {
         return value != null && value.toLowerCase(Locale.ROOT).contains(keyword);
     }
 
+    private boolean isStoreAccount(Optional<CustomUserDetails> currentUser) {
+        return currentUser
+                .map(this::isStoreAccount)
+                .orElse(false);
+    }
+
+    private boolean isStoreAccount(CustomUserDetails userDetails) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(authority -> AccountType.CUA_HANG.getValue().equals(authority.getAuthority()));
+    }
+
+    private void ensureStoreOwnerCanEdit(Restaurant entity) {
+        Optional<CustomUserDetails> currentUser = SecurityUtils.getCurrentUser();
+        if (!isStoreAccount(currentUser)) {
+            return;
+        }
+
+        UUID ownerId = currentUser.map(CustomUserDetails::getId)
+                .orElseThrow(() -> new UnauthorizedException("Vui long dang nhap de cap nhat cua hang"));
+        if (!ownerId.equals(entity.getIdChuCuaHang())) {
+            throw new UnauthorizedException("Tai khoan cuaHang chi duoc cap nhat cua hang cua minh");
+        }
+    }
+
     private void applyRequest(
             Restaurant entity,
             String name,
@@ -268,6 +341,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .yeuThich(isFavorite(entity.getId()))
                 .diemDanhGiaTrungBinh(reviewSummary.getDiemDanhGiaTrungBinh())
                 .soLuongDanhGia(reviewSummary.getSoLuongDanhGia())
+                .idChuCuaHang(entity.getIdChuCuaHang())
                 .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
                 .loaiCuaHang(entity.getLoaiCuaHang())
                 .loaiKinhDoanh(entity.getLoaiKinhDoanh())
@@ -290,6 +364,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .yeuThich(isFavorite(entity.getId()))
                 .diemDanhGiaTrungBinh(reviewSummary.getDiemDanhGiaTrungBinh())
                 .soLuongDanhGia(reviewSummary.getSoLuongDanhGia())
+                .idChuCuaHang(entity.getIdChuCuaHang())
                 .trangThai(entity.getStatus() == null ? "ACTIVE" : entity.getStatus())
                 .loaiCuaHang(entity.getLoaiCuaHang())
                 .loaiKinhDoanh(entity.getLoaiKinhDoanh())

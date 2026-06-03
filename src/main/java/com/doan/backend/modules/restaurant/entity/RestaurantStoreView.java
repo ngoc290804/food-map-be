@@ -8,6 +8,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -53,6 +54,9 @@ public class RestaurantStoreView extends BaseEntity {
 
     @Column(name = "diemdanhgia", precision = 3, scale = 1)
     private BigDecimal diemDanhGia;
+
+    @Column(name = "idchucuahang")
+    private UUID idChuCuaHang;
 
     @Column(name = "danhdauxoa")
     private Integer danhDauXoa;

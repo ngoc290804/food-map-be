@@ -1,5 +1,6 @@
 package com.doan.backend.modules.auth.dto.request;
 
+import com.doan.backend.common.enums.AccountType;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -28,4 +29,6 @@ public class RegisterRequest {
     private String password;
 
     private String confirmPassword;
+
+    private AccountType phanQuyen;
 }

@@ -1,11 +1,14 @@
 package com.doan.backend.modules.checkin.service.impl;
 
+import com.doan.backend.common.dto.PageResponse;
+import com.doan.backend.common.exception.BadRequestException;
 import com.doan.backend.common.exception.ResourceNotFoundException;
 import com.doan.backend.common.exception.UnauthorizedException;
 import com.doan.backend.modules.checkin.dto.request.CheckInRequest;
 import com.doan.backend.modules.checkin.entity.CheckIn;
 import com.doan.backend.modules.checkin.repository.CheckInRepository;
 import com.doan.backend.modules.checkin.service.CheckInService;
+import com.doan.backend.modules.checkin.vo.CheckInRankingVo;
 import com.doan.backend.modules.checkin.vo.CheckInVo;
 import com.doan.backend.modules.restaurant.entity.Restaurant;
 import com.doan.backend.modules.restaurant.repository.RestaurantRepository;
@@ -16,6 +19,8 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CheckInServiceImpl implements CheckInService {
 
-    private static final int ALLOWED_DISTANCE_METERS = 200;
+    private static final int ALLOWED_DISTANCE_METERS = 100;
     private static final double EARTH_RADIUS_METERS = 6371000D;
 
     private final CheckInRepository checkInRepository;
@@ -44,12 +49,17 @@ public class CheckInServiceImpl implements CheckInService {
                 request.getLongitude(),
                 restaurant.getLatitude(),
                 restaurant.getLongitude());
-        boolean success = distance != null && distance <= ALLOWED_DISTANCE_METERS;
+        if (distance == null) {
+            throw new BadRequestException("Quan an chua co toa do de check-in");
+        }
+        if (distance > ALLOWED_DISTANCE_METERS) {
+            throw new BadRequestException("Khoang cach cua ban voi quan qua xa");
+        }
 
         CheckIn checkIn = new CheckIn();
         checkIn.setUser(user);
         checkIn.setRestaurant(restaurant);
-        checkIn.setCheckIn(success ? 1 : 0);
+        checkIn.setCheckIn(1);
         return mapToResponse(checkInRepository.save(checkIn), request.getLatitude(), request.getLongitude(), distance);
     }
 
@@ -73,6 +83,16 @@ public class CheckInServiceImpl implements CheckInService {
         return checkInRepository.findByRestaurantIdOrderByCreatedAtDesc(restaurantId).stream()
                 .map(checkIn -> mapToResponse(checkIn, null, null, null))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<CheckInRankingVo> ranking(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 10 : Math.min(size, 50);
+        Page<CheckInRankingVo> result = checkInRepository.findSuccessfulCheckInRanking(
+                PageRequest.of(safePage, safeSize));
+        return PageResponse.from(result, result.getContent());
     }
 
     @Override

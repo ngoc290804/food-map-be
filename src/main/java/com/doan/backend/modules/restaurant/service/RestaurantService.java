@@ -21,9 +21,15 @@ public interface RestaurantService {
 
     CuaHangVo getDetail(UUID id);
 
+    CuaHangVo getByOwnerId(UUID idTaiKhoan);
+
+    CuaHangVo getMyRestaurant();
+
     void delete(UUID id);
 
     PageResponse<CuaHangVo> search(String keyword, int page, int size);
+
+    PageResponse<CuaHangVo> ranking(int page, int size);
 
     PageResponse<CuaHangVo> search(
             String keyword,

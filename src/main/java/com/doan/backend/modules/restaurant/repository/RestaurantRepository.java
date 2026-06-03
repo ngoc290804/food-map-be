@@ -14,6 +14,8 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, UUID>, J
     @Query("select r from Restaurant r where r.id = :id and coalesce(r.danhDauXoa, 0) = 0")
     Optional<Restaurant> findActiveById(@Param("id") UUID id);
 
+    Optional<Restaurant> findByIdChuCuaHang(UUID idChuCuaHang);
+
     @Query("select count(r) > 0 from Restaurant r where r.id = :id and coalesce(r.danhDauXoa, 0) = 0")
     boolean existsActiveById(@Param("id") UUID id);
 

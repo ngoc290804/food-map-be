@@ -21,6 +21,7 @@ public class CuaHangVo {
     private final Boolean yeuThich;
     private final BigDecimal diemDanhGiaTrungBinh;
     private final long soLuongDanhGia;
+    private final UUID idChuCuaHang;
     private final String trangThai;
     private final String loaiCuaHang;
     private final String loaiKinhDoanh;

@@ -1,6 +1,7 @@
 package com.doan.backend.modules.auth.service.impl;
 
 import com.doan.backend.common.constant.AppConstants;
+import com.doan.backend.common.enums.AccountType;
 import com.doan.backend.common.exception.BadRequestException;
 import com.doan.backend.common.exception.ResourceNotFoundException;
 import com.doan.backend.modules.auth.dto.request.ChangePasswordRequest;
@@ -52,7 +53,7 @@ public class AuthServiceImpl implements AuthService {
                 : request.getFullName());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setStatus(AppConstants.STATUS_ACTIVE);
-        user.setRoleCode("khach");
+        user.setRoleCode(resolveRegisterAccountType(request.getPhanQuyen()).getValue());
         User savedUser = userRepository.save(user);
 
         return buildLoginResponse(savedUser);
@@ -142,8 +143,17 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .status(user.getStatus())
+                .loaiTaiKhoan(user.getRoleCode())
                 .roles(extractRoles(user))
                 .build();
+    }
+
+    private AccountType resolveRegisterAccountType(AccountType accountType) {
+        AccountType resolvedType = accountType == null ? AccountType.KHACH : accountType;
+        if (!resolvedType.isRegisterAllowed()) {
+            throw new BadRequestException("phanQuyen chi duoc chon khach hoac cuaHang");
+        }
+        return resolvedType;
     }
 
     private Set<String> extractRoles(User user) {

@@ -24,6 +24,7 @@ public class UploadServiceImpl implements UploadService {
 
     @Override
     public UploadResponse uploadImage(MultipartFile file) {
+        validateCloudinaryConfig();
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("File upload khong duoc de trong");
         }
@@ -51,5 +52,17 @@ public class UploadServiceImpl implements UploadService {
         } catch (IOException ex) {
             throw new BadRequestException("Khong the upload file");
         }
+    }
+
+    private void validateCloudinaryConfig() {
+        if (isBlank(cloudinaryProperties.getCloudName())
+                || isBlank(cloudinaryProperties.getApiKey())
+                || isBlank(cloudinaryProperties.getApiSecret())) {
+            throw new BadRequestException("Chua cau hinh day du Cloudinary Cloud Name, API Key hoac API Secret");
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 }
