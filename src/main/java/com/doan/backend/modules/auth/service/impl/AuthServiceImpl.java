@@ -64,10 +64,9 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail(), request.getUsernameOrEmail())
                 .orElseThrow(() -> new BadRequestException("Tên đăng nhập/email hoặc mật khẩu không đúng"));
-        if (!isPasswordValid(request.getPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BadRequestException("Tên đăng nhập/email hoặc mật khẩu không đúng");
         }
-        upgradeLegacyPasswordIfNeeded(user, request.getPassword());
         return buildLoginResponse(user);
     }
 
@@ -113,27 +112,6 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .user(buildUserInfoResponse(user))
                 .build();
-    }
-
-    private boolean isPasswordValid(String rawPassword, String storedPassword) {
-        if (storedPassword == null) {
-            return false;
-        }
-        return isBcryptHash(storedPassword)
-                ? passwordEncoder.matches(rawPassword, storedPassword)
-                : storedPassword.equals(rawPassword);
-    }
-
-    private void upgradeLegacyPasswordIfNeeded(User user, String rawPassword) {
-        if (isBcryptHash(user.getPassword())) {
-            return;
-        }
-        user.setPassword(passwordEncoder.encode(rawPassword));
-        userRepository.save(user);
-    }
-
-    private boolean isBcryptHash(String value) {
-        return value != null && (value.startsWith("$2a$") || value.startsWith("$2b$") || value.startsWith("$2y$"));
     }
 
     private UserInfoResponse buildUserInfoResponse(User user) {
