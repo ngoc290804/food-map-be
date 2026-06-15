@@ -50,33 +50,60 @@ Base backend Spring Boot scaffolded from the PDF `Base-be-hoan-thien-java-spring
 
 ## Configuration
 
-Default config is in [application.yml](/D:/food-map-be/src/main/resources/application.yml).
+Default config is in `src/main/resources/application.yml`.
 
-Supported environment overrides:
+Secrets are not committed to Git. For local development, copy `.env.example` to `.env` and fill in real values. For Render, set the same values in the service Environment settings.
+
+Required environment variables:
 
 - `DB_URL`
 - `DB_USERNAME`
 - `DB_PASSWORD`
 - `JWT_SECRET`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+Optional environment variables:
+
+- `PORT`
 - `JWT_EXPIRATION`
 - `UPLOAD_DIR`
+- `CORS_ALLOWED_ORIGINS`
+- `CLOUDINARY_FOLDER`
+- `NOMINATIM_USER_AGENT`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_BASE_URL`
+- `OPENAI_MAX_RESTAURANTS`
 
 ## Database
 
-The backend uses local PostgreSQL:
+The backend uses PostgreSQL. Production is configured through `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`, so Neon or another managed PostgreSQL provider can be used without code changes.
 
-- Host: `localhost`
-- Port: `5432`
-- Database: `food_map_db`
-- Username: `postgres`
+Use the JDBC URL format for Spring Boot:
+
+```properties
+DB_URL=jdbc:postgresql://your-host/your-database?sslmode=require
+```
+
+Do not commit real database passwords or API keys. Keep them in `.env` locally and in Render Environment Variables in production.
 
 ## Run
 
 1. Install Java 17+.
-2. Start PostgreSQL and make sure database `food_map_db` exists.
-3. Update JWT config if needed.
+2. Copy `.env.example` to `.env` and fill in real values.
+3. Make sure the configured PostgreSQL database already has the required schema/data, or enable and run Flyway migrations intentionally.
 4. Run `.\mvnw.cmd spring-boot:run` on Windows or `./mvnw spring-boot:run` on macOS/Linux.
 5. Open Swagger at `http://localhost:8080/swagger-ui.html`.
+
+## Render
+
+- Build command: `./mvnw clean package -DskipTests`
+- Start command: `java -jar target/backend-1.0.0.jar`
+- Runtime: Java 17, pinned by `system.properties`
+- Set all required environment variables in Render before deploying.
+- Set `CORS_ALLOWED_ORIGINS` to the real frontend URL, for example `https://your-frontend.onrender.com`.
 
 ## Build
 
