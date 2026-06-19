@@ -4,9 +4,12 @@ import com.doan.backend.common.enums.MenuCategory;
 import com.doan.backend.common.enums.MenuDetail;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -39,6 +42,14 @@ public class CuaHangUpdateDto {
     private String hinhAnh;
 
     private String imagePublicId;
+
+    @DecimalMin(value = "-90.0", message = "latitude khong hop le")
+    @DecimalMax(value = "90.0", message = "latitude khong hop le")
+    private BigDecimal latitude;
+
+    @DecimalMin(value = "-180.0", message = "longitude khong hop le")
+    @DecimalMax(value = "180.0", message = "longitude khong hop le")
+    private BigDecimal longitude;
 
     @NotNull(message = "loaiCuaHang khong duoc de trong")
     private MenuCategory loaiCuaHang;

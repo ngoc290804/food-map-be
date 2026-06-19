@@ -9,4 +9,5 @@ import lombok.Getter;
 public class GeocodingResult {
     private final BigDecimal latitude;
     private final BigDecimal longitude;
+    private final String displayName;
 }

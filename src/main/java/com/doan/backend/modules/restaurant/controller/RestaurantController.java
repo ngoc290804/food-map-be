@@ -6,9 +6,12 @@ import com.doan.backend.common.enums.MenuCategory;
 import com.doan.backend.common.enums.MenuDetail;
 import com.doan.backend.modules.restaurant.dto.request.CuaHangCreateDto;
 import com.doan.backend.modules.restaurant.dto.request.CuaHangUpdateDto;
+import com.doan.backend.modules.restaurant.dto.response.GeocodingResult;
+import com.doan.backend.modules.restaurant.service.GeocodingService;
 import com.doan.backend.modules.restaurant.service.RestaurantService;
 import com.doan.backend.modules.restaurant.vo.CuaHangVo;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -31,6 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class RestaurantController {
 
     private final RestaurantService restaurantService;
+    private final GeocodingService geocodingService;
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ApiResponse<CuaHangVo> create(@Valid @RequestBody CuaHangCreateDto request) {
@@ -80,6 +84,14 @@ public class RestaurantController {
     @GetMapping("/mine")
     public ApiResponse<CuaHangVo> getMyRestaurant() {
         return ApiResponse.success(restaurantService.getMyRestaurant());
+    }
+
+    @GetMapping("/geocode")
+    public ApiResponse<List<GeocodingResult>> geocode(
+            @RequestParam String address,
+            @RequestParam(defaultValue = "5") int limit
+    ) {
+        return ApiResponse.success(geocodingService.search(address, limit));
     }
 
     @GetMapping("/{id}")

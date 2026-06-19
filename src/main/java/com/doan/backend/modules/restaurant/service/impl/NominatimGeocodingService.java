@@ -6,6 +6,8 @@ import com.doan.backend.modules.restaurant.service.GeocodingService;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -35,30 +37,36 @@ public class NominatimGeocodingService implements GeocodingService {
 
     @Override
     public Optional<GeocodingResult> geocode(String address) {
+        return search(address, 1).stream().findFirst();
+    }
+
+    @Override
+    public List<GeocodingResult> search(String address, int limit) {
         if (address == null || address.isBlank()) {
-            return Optional.empty();
+            return List.of();
         }
 
+        int safeLimit = Math.max(1, Math.min(limit, 10));
         for (String query : buildQueries(address)) {
-            Optional<GeocodingResult> result = geocodeOne(query);
-            if (result.isPresent()) {
+            List<GeocodingResult> result = geocodeOne(query, safeLimit);
+            if (!result.isEmpty()) {
                 log.info("Geocoded address '{}' using query '{}'", address, query);
                 return result;
             }
         }
 
         log.warn("Nominatim did not return coordinates for address '{}'", address);
-        return Optional.empty();
+        return List.of();
     }
 
-    private Optional<GeocodingResult> geocodeOne(String query) {
+    private List<GeocodingResult> geocodeOne(String query, int limit) {
         try {
             throttle();
             JsonNode response = restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/search")
                             .queryParam("format", "jsonv2")
-                            .queryParam("limit", 1)
+                            .queryParam("limit", limit)
                             .queryParam("q", query)
                             .queryParam("countrycodes", properties.getCountryCodes())
                             .build())
@@ -68,17 +76,22 @@ public class NominatimGeocodingService implements GeocodingService {
                     .body(JsonNode.class);
 
             if (response == null || !response.isArray() || response.isEmpty()) {
-                return Optional.empty();
+                return List.of();
             }
 
-            JsonNode firstResult = response.get(0);
-            return Optional.of(GeocodingResult.builder()
-                    .latitude(new BigDecimal(firstResult.path("lat").asText()))
-                    .longitude(new BigDecimal(firstResult.path("lon").asText()))
-                    .build());
+            List<GeocodingResult> results = new ArrayList<>();
+            for (JsonNode item : response) {
+                results.add(GeocodingResult.builder()
+                        .latitude(new BigDecimal(item.path("lat").asText()))
+                        .longitude(new BigDecimal(item.path("lon").asText()))
+                        .displayName(item.path("display_name").asText(query))
+                        .build());
+            }
+
+            return results;
         } catch (RestClientException | IllegalArgumentException ex) {
             log.warn("Cannot geocode query '{}': {}", query, ex.getMessage());
-            return Optional.empty();
+            return List.of();
         }
     }
 

@@ -26,11 +26,12 @@ import com.doan.backend.modules.upload.dto.response.UploadResponse;
 import com.doan.backend.modules.upload.service.UploadService;
 import com.doan.backend.security.CustomUserDetails;
 import com.doan.backend.security.SecurityUtils;
-import java.util.Objects;
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -62,7 +63,8 @@ public class RestaurantServiceImpl implements RestaurantService {
                 Restaurant entity = existingRestaurant.get();
                 applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(),
                         request.getGioDongCua(), request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(),
-                        request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
+                        request.getLatitude(), request.getLongitude(), request.getLoaiCuaHang(),
+                        request.getLoaiKinhDoanh());
                 entity.setIdChuCuaHang(ownerId);
                 entity.setDanhDauXoa(0);
                 return mapToResponse(restaurantRepository.save(entity));
@@ -71,8 +73,8 @@ public class RestaurantServiceImpl implements RestaurantService {
 
         Restaurant entity = new Restaurant();
         applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
-                request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLoaiCuaHang(),
-                request.getLoaiKinhDoanh());
+                request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLatitude(),
+                request.getLongitude(), request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
         currentUser
                 .filter(this::isStoreAccount)
                 .map(CustomUserDetails::getId)
@@ -93,8 +95,8 @@ public class RestaurantServiceImpl implements RestaurantService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay quan an"));
         ensureStoreOwnerCanEdit(entity);
         applyRequest(entity, request.getTenQuanAn(), request.getDiaChi(), request.getGioMoCua(), request.getGioDongCua(),
-                request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLoaiCuaHang(),
-                request.getLoaiKinhDoanh());
+                request.getMoTa(), request.getHinhAnh(), request.getImagePublicId(), request.getLatitude(),
+                request.getLongitude(), request.getLoaiCuaHang(), request.getLoaiKinhDoanh());
         entity.setStatus(request.getTrangThai());
         entity.setDanhDauXoa(0);
         return mapToResponse(restaurantRepository.save(entity));
@@ -270,6 +272,8 @@ public class RestaurantServiceImpl implements RestaurantService {
             String description,
             String imageUrl,
             String imagePublicId,
+            BigDecimal latitude,
+            BigDecimal longitude,
             MenuCategory loaiCuaHang,
             MenuDetail loaiKinhDoanh
     ) {
@@ -283,10 +287,25 @@ public class RestaurantServiceImpl implements RestaurantService {
         entity.setImagePublicId(imagePublicId);
         entity.setLoaiCuaHang(loaiCuaHang == null ? null : loaiCuaHang.name());
         entity.setLoaiKinhDoanh(loaiKinhDoanh == null ? null : loaiKinhDoanh.name());
-        updateCoordinates(entity, previousAddress, address);
+        updateCoordinates(entity, previousAddress, address, latitude, longitude);
     }
 
-    private void updateCoordinates(Restaurant entity, String previousAddress, String address) {
+    private void updateCoordinates(
+            Restaurant entity,
+            String previousAddress,
+            String address,
+            BigDecimal latitude,
+            BigDecimal longitude
+    ) {
+        if (latitude != null || longitude != null) {
+            if (latitude == null || longitude == null) {
+                throw new BadRequestException("latitude va longitude phai duoc gui cung nhau");
+            }
+            entity.setLatitude(latitude);
+            entity.setLongitude(longitude);
+            return;
+        }
+
         boolean shouldGeocode = entity.getLatitude() == null
                 || entity.getLongitude() == null
                 || !Objects.equals(previousAddress, address);
