@@ -177,7 +177,7 @@ public class RestaurantServiceImpl implements RestaurantService {
 
     @Override
     public List<CuaHangVo> findActiveForChatbot(int limit) {
-        int safeLimit = limit <= 0 ? 50 : Math.min(limit, 100);
+        int safeLimit = limit <= 0 ? 100 : Math.min(limit, 500);
         return restaurantStoreViewRepository.findActiveRestaurants().stream()
                 .limit(safeLimit)
                 .map(this::mapToResponse)

@@ -10,23 +10,25 @@ import com.doan.backend.modules.chatbot.repository.ChatMessageRepository;
 import com.doan.backend.modules.chatbot.repository.ChatSessionRepository;
 import com.doan.backend.modules.chatbot.service.ChatbotService;
 import com.doan.backend.modules.chatbot.service.OpenAiChatClient;
+import com.doan.backend.modules.chatbot.service.OpenAiChatClient.AiChatResult;
 import com.doan.backend.modules.menu.entity.MenuItem;
 import com.doan.backend.modules.menu.repository.MenuItemRepository;
 import com.doan.backend.modules.restaurant.service.RestaurantService;
 import com.doan.backend.modules.restaurant.vo.CuaHangVo;
-import com.doan.backend.modules.user.entity.User;
 import com.doan.backend.modules.user.repository.UserRepository;
 import com.doan.backend.security.SecurityUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.text.Normalizer;
-import java.util.Arrays;
+import java.time.LocalTime;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -38,11 +40,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ChatbotServiceImpl implements ChatbotService {
 
     private static final Pattern DIACRITICS_PATTERN = Pattern.compile("\\p{M}+");
-    private static final Set<String> STOP_WORDS = Set.of(
-            "toi", "minh", "muon", "an", "uong", "quan", "quan an", "tim", "goi", "y", "cho", "gan", "o", "khu",
-            "vuc", "nao", "co", "khong", "thich", "can", "mot", "may", "dia", "diem", "danh", "gia", "cao",
-            "tot", "sao", "nhat", "tren", "tu"
-    );
 
     private final RestaurantService restaurantService;
     private final OpenAiChatClient openAiChatClient;
@@ -56,15 +53,23 @@ public class ChatbotServiceImpl implements ChatbotService {
     @Override
     @Transactional
     public ChatbotResponse ask(ChatbotAskRequest request) {
-        var allRestaurants = restaurantService.findActiveForChatbot(
+        List<CuaHangVo> allRestaurants = restaurantService.findActiveForChatbot(
                 Math.max(1, openAiProperties.getMaxRestaurants()));
         List<MenuItem> menuItems = menuItemRepository.findActiveRestaurantMenuItems();
-        String restaurantContext = buildRestaurantContext(allRestaurants, menuItems);
-        String openAiAnswer = openAiChatClient.generateAnswer(request.getQuestion(), restaurantContext);
-        List<CuaHangVo> suggestedRestaurants = selectFallbackRestaurants(request, allRestaurants, menuItems);
-        String answer = openAiAnswer == null || openAiAnswer.isBlank()
-                ? buildFallbackAnswer(suggestedRestaurants)
-                : openAiAnswer;
+        Map<UUID, CuaHangVo> restaurantIndex = allRestaurants.stream()
+                .collect(Collectors.toMap(CuaHangVo::getId, item -> item, (left, right) -> left, LinkedHashMap::new));
+
+        AiChatResult aiResult = openAiChatClient.generateRecommendation(
+                request,
+                (name, arguments) -> executeTool(name, arguments, request, allRestaurants, menuItems)
+        );
+
+        List<CuaHangVo> suggestedRestaurants = restaurantsFromAiResult(aiResult, restaurantIndex);
+        if (suggestedRestaurants.isEmpty()) {
+            suggestedRestaurants = searchRestaurantsByQuestion(request, allRestaurants, menuItems, 5);
+        }
+
+        String answer = buildAnswer(aiResult, suggestedRestaurants);
         ChatSession session = createSession(request.getQuestion());
         saveMessage(session, "user", request.getQuestion(), null);
         saveMessage(session, "assistant", answer, buildJsonData(suggestedRestaurants));
@@ -84,6 +89,296 @@ public class ChatbotServiceImpl implements ChatbotService {
                         .map(this::mapToHistory)
                         .toList())
                 .orElse(List.of());
+    }
+
+    private String executeTool(
+            String name,
+            JsonNode arguments,
+            ChatbotAskRequest request,
+            List<CuaHangVo> restaurants,
+            List<MenuItem> menuItems
+    ) {
+        if (!"search_restaurants".equals(name)) {
+            return "{\"error\":\"Unknown tool\"}";
+        }
+
+        List<CuaHangVo> matches = searchRestaurantsByArguments(arguments, request, restaurants, menuItems);
+        return serializeToolResult(matches, menuItems);
+    }
+
+    private List<CuaHangVo> restaurantsFromAiResult(AiChatResult aiResult, Map<UUID, CuaHangVo> restaurantIndex) {
+        if (aiResult == null || aiResult.restaurantIds() == null) {
+            return List.of();
+        }
+        return aiResult.restaurantIds().stream()
+                .map(restaurantIndex::get)
+                .filter(item -> item != null)
+                .limit(5)
+                .toList();
+    }
+
+    private String buildAnswer(AiChatResult aiResult, List<CuaHangVo> suggestedRestaurants) {
+        if (aiResult != null && aiResult.answer() != null && !aiResult.answer().isBlank()) {
+            if (!suggestedRestaurants.isEmpty() && isNoResultAnswer(aiResult.answer())) {
+                return buildFallbackAnswer(suggestedRestaurants);
+            }
+            return aiResult.answer();
+        }
+        return buildFallbackAnswer(suggestedRestaurants);
+    }
+
+    private List<CuaHangVo> searchRestaurantsByArguments(
+            JsonNode arguments,
+            ChatbotAskRequest request,
+            List<CuaHangVo> restaurants,
+            List<MenuItem> menuItems
+    ) {
+        ToolCriteria criteria = buildCriteria(
+                text(arguments, "query"),
+                text(arguments, "location"),
+                text(arguments, "category"),
+                decimal(arguments, "minRating"),
+                arguments.path("openNow").asBoolean(false),
+                text(arguments, "sortBy"),
+                intValue(arguments, "limit", 5),
+                request.getLatitude(),
+                request.getLongitude()
+        );
+        return searchRestaurants(criteria, restaurants, menuItems);
+    }
+
+    private List<CuaHangVo> searchRestaurantsByQuestion(
+            ChatbotAskRequest request,
+            List<CuaHangVo> restaurants,
+            List<MenuItem> menuItems,
+            int limit
+    ) {
+        return searchRestaurants(
+                buildCriteria(request.getQuestion(), "", "", null, false, "relevance", limit,
+                        request.getLatitude(), request.getLongitude()),
+                restaurants,
+                menuItems
+        );
+    }
+
+    private ToolCriteria buildCriteria(
+            String query,
+            String location,
+            String category,
+            BigDecimal minRating,
+            boolean openNow,
+            String sortBy,
+            int limit,
+            BigDecimal latitude,
+            BigDecimal longitude
+    ) {
+        String normalizedQuery = normalize(query);
+        String normalizedLocation = normalize(location);
+        boolean proximityRequested = hasProximityIntent(normalizedQuery)
+                || hasProximityIntent(normalizedLocation);
+        String cleanLocation = proximityRequested ? "" : location;
+        String cleanQuery = cleanQuery(query);
+        String cleanSortBy = sortBy == null || sortBy.isBlank() ? "relevance" : sortBy;
+        if (proximityRequested && latitude != null && longitude != null) {
+            cleanSortBy = "distance";
+        }
+        return new ToolCriteria(cleanQuery, cleanLocation, category, minRating, openNow, cleanSortBy, limit,
+                latitude, longitude);
+    }
+
+    private List<CuaHangVo> searchRestaurants(
+            ToolCriteria criteria,
+            List<CuaHangVo> restaurants,
+            List<MenuItem> menuItems
+    ) {
+        int limit = Math.max(1, Math.min(criteria.limit(), 5));
+        return restaurants.stream()
+                .map(restaurant -> scoreRestaurant(criteria, restaurant, menuItems))
+                .filter(ScoredRestaurant::matched)
+                .sorted(comparator(criteria))
+                .limit(limit)
+                .map(ScoredRestaurant::restaurant)
+                .toList();
+    }
+
+    private ScoredRestaurant scoreRestaurant(ToolCriteria criteria, CuaHangVo restaurant, List<MenuItem> menuItems) {
+        int score = 0;
+        String query = normalize(criteria.query());
+        String location = normalize(criteria.location());
+        String restaurantText = restaurantText(restaurant);
+        String menuText = menuText(restaurant.getId(), menuItems);
+
+        if (!criteria.category().isBlank() && !criteria.category().equalsIgnoreCase(restaurant.getLoaiCuaHang())) {
+            return ScoredRestaurant.unmatched(restaurant);
+        }
+        if (!location.isBlank()) {
+            if (!containsAllTerms(normalize(restaurant.getDiaChi()), location)) {
+                return ScoredRestaurant.unmatched(restaurant);
+            }
+            score += 35;
+        }
+        if (!query.isBlank()) {
+            int queryScore = scoreText(restaurantText + " " + menuText, query);
+            if (queryScore == 0) {
+                return ScoredRestaurant.unmatched(restaurant);
+            }
+            score += queryScore;
+        }
+
+        BigDecimal rating = restaurant.getDiemDanhGiaTrungBinh() == null
+                ? BigDecimal.ZERO
+                : restaurant.getDiemDanhGiaTrungBinh();
+        if (criteria.minRating() != null && rating.compareTo(criteria.minRating()) < 0) {
+            return ScoredRestaurant.unmatched(restaurant);
+        }
+        score += rating.multiply(BigDecimal.TEN).intValue();
+
+        if (criteria.openNow() && !isRestaurantOpen(restaurant)) {
+            return ScoredRestaurant.unmatched(restaurant);
+        }
+        if (criteria.openNow()) {
+            score += 12;
+        }
+
+        Double distance = distanceInMeters(criteria.latitude(), criteria.longitude(), restaurant);
+        if (distance != null) {
+            score += Math.max(0, 25 - (int) Math.min(distance / 300, 25));
+        }
+        return new ScoredRestaurant(restaurant, true, score, rating, distance);
+    }
+
+    private Comparator<ScoredRestaurant> comparator(ToolCriteria criteria) {
+        if ("distance".equalsIgnoreCase(criteria.sortBy()) && criteria.latitude() != null && criteria.longitude() != null) {
+            return Comparator.comparing(ScoredRestaurant::distance, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(ScoredRestaurant::score, Comparator.reverseOrder())
+                    .thenComparing(ScoredRestaurant::rating, Comparator.reverseOrder());
+        }
+        if ("rating".equalsIgnoreCase(criteria.sortBy())) {
+            return Comparator.comparing(ScoredRestaurant::rating, Comparator.reverseOrder())
+                    .thenComparing(ScoredRestaurant::score, Comparator.reverseOrder());
+        }
+        return Comparator.comparing(ScoredRestaurant::score, Comparator.reverseOrder())
+                .thenComparing(ScoredRestaurant::rating, Comparator.reverseOrder());
+    }
+
+    private int scoreText(String text, String query) {
+        String normalizedText = normalize(text);
+        List<String> words = List.of(query.split(" ")).stream()
+                .filter(word -> word.length() >= 2)
+                .toList();
+        int score = 0;
+        if (normalizedText.contains(query)) {
+            score += 45;
+        }
+        for (String word : words) {
+            if (normalizedText.contains(word)) {
+                score += 12;
+            }
+        }
+        return score;
+    }
+
+    private boolean containsAllTerms(String text, String terms) {
+        List<String> words = List.of(terms.split(" ")).stream()
+                .filter(word -> word.length() >= 2)
+                .toList();
+        return !words.isEmpty() && words.stream().allMatch(text::contains);
+    }
+
+    private boolean hasProximityIntent(String normalizedText) {
+        if (normalizedText.isBlank()) {
+            return false;
+        }
+        return normalizedText.contains("gan toi")
+                || normalizedText.contains("gan minh")
+                || normalizedText.contains("gan day")
+                || normalizedText.contains("quanh day")
+                || normalizedText.contains("xung quanh")
+                || normalizedText.contains("gan nhat")
+                || normalizedText.equals("gan")
+                || normalizedText.equals("gan toi");
+    }
+
+    private String cleanQuery(String query) {
+        String normalizedQuery = normalize(query);
+        if (normalizedQuery.isBlank()) {
+            return "";
+        }
+        List<String> words = List.of(normalizedQuery.split(" ")).stream()
+                .filter(word -> word.length() >= 2)
+                .filter(word -> !isQueryStopWord(word))
+                .toList();
+        return String.join(" ", words);
+    }
+
+    private boolean isQueryStopWord(String word) {
+        return List.of(
+                "toi", "minh", "ban", "muon", "can", "tim", "goi", "y", "cho", "co", "khong",
+                "quan", "an", "uong", "gan", "day", "quanh", "xung", "nhat", "dia", "diem",
+                "khu", "vuc", "o", "tai", "vi", "tri", "nao", "mot", "may"
+        ).contains(word);
+    }
+
+    private boolean isNoResultAnswer(String answer) {
+        String normalizedAnswer = normalize(answer);
+        return normalizedAnswer.contains("khong tim thay")
+                || normalizedAnswer.contains("chua tim thay")
+                || normalizedAnswer.contains("khong co quan")
+                || normalizedAnswer.contains("khong thay quan")
+                || normalizedAnswer.contains("rat tiec");
+    }
+
+    private boolean isRestaurantOpen(CuaHangVo restaurant) {
+        try {
+            if (restaurant.getGioMoCua() == null || restaurant.getGioDongCua() == null) {
+                return false;
+            }
+            LocalTime now = LocalTime.now();
+            LocalTime open = LocalTime.parse(restaurant.getGioMoCua());
+            LocalTime close = LocalTime.parse(restaurant.getGioDongCua());
+            if (close.isBefore(open)) {
+                return !now.isBefore(open) || !now.isAfter(close);
+            }
+            return !now.isBefore(open) && !now.isAfter(close);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private String serializeToolResult(List<CuaHangVo> matches, List<MenuItem> menuItems) {
+        try {
+            List<Map<String, Object>> items = matches.stream()
+                    .map(restaurant -> {
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("id", restaurant.getId().toString());
+                        item.put("name", nullToEmpty(restaurant.getTenQuanAn()));
+                        item.put("address", nullToEmpty(restaurant.getDiaChi()));
+                        item.put("category", nullToEmpty(restaurant.getLoaiCuaHang()));
+                        item.put("businessType", nullToEmpty(restaurant.getLoaiKinhDoanh()));
+                        item.put("rating", restaurant.getDiemDanhGiaTrungBinh() == null
+                                ? BigDecimal.ZERO
+                                : restaurant.getDiemDanhGiaTrungBinh());
+                        item.put("reviewCount", restaurant.getSoLuongDanhGia());
+                        item.put("openTime", nullToEmpty(restaurant.getGioMoCua()));
+                        item.put("closeTime", nullToEmpty(restaurant.getGioDongCua()));
+                        item.put("description", nullToEmpty(restaurant.getMoTa()));
+                        item.put("menu", menuNames(restaurant.getId(), menuItems));
+                        return item;
+                    })
+                    .toList();
+            return objectMapper.writeValueAsString(Map.of("restaurants", items));
+        } catch (JsonProcessingException ex) {
+            return "{\"restaurants\":[]}";
+        }
+    }
+
+    private List<String> menuNames(UUID restaurantId, List<MenuItem> menuItems) {
+        return menuItems.stream()
+                .filter(item -> item.getRestaurant() != null && restaurantId.equals(item.getRestaurant().getId()))
+                .limit(8)
+                .map(MenuItem::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .toList();
     }
 
     private ChatSession createSession(String question) {
@@ -132,7 +427,7 @@ public class ChatbotServiceImpl implements ChatbotService {
     }
 
     private String buildTitle(String question) {
-        String trimmed = question == null ? "Phiên chat mới" : question.trim();
+        String trimmed = question == null ? "Phien chat moi" : question.trim();
         if (trimmed.length() <= 80) {
             return trimmed;
         }
@@ -146,270 +441,34 @@ public class ChatbotServiceImpl implements ChatbotService {
         return Math.max(1, text.length() / 4);
     }
 
-    private String buildRestaurantContext(List<CuaHangVo> restaurants, List<MenuItem> menuItems) {
-        if (restaurants.isEmpty()) {
-            return "Không tìm thấy quán phù hợp trong hệ thống.";
-        }
-        return restaurants.stream()
-                .map(restaurant -> "- Tên: %s | Địa chỉ: %s | Loại cửa hàng: %s | Loại kinh doanh: %s | Điểm: %s | Mô tả: %s | Menu: %s"
-                        .formatted(
-                                nullToEmpty(restaurant.getTenQuanAn()),
-                                nullToEmpty(restaurant.getDiaChi()),
-                                nullToEmpty(restaurant.getLoaiCuaHang()),
-                                nullToEmpty(restaurant.getLoaiKinhDoanh()),
-                                restaurant.getDiemDanhGiaTrungBinh() == null
-                                        ? "0"
-                                        : restaurant.getDiemDanhGiaTrungBinh(),
-                                nullToEmpty(restaurant.getMoTa()),
-                                buildMenuSummary(restaurant.getId(), menuItems)))
-                .collect(Collectors.joining("\n"));
-    }
-
     private String buildFallbackAnswer(List<CuaHangVo> matches) {
         if (matches.isEmpty()) {
-            return "Mình chưa tìm thấy quán phù hợp, bạn thử mô tả rõ hơn về món, vị hoặc khu vực.";
+            return "Minh chua tim thay quan phu hop. Ban thu noi ro hon ve mon an, khu vuc hoac loai quan nhe.";
         }
         String names = matches.stream()
                 .map(CuaHangVo::getTenQuanAn)
                 .limit(3)
                 .collect(Collectors.joining(", "));
-        return "Mình gợi ý cho bạn một số quán phù hợp: " + names + ".";
+        return "Minh goi y cho ban mot so quan phu hop: " + names + ".";
     }
 
-    private List<CuaHangVo> selectFallbackRestaurants(
-            ChatbotAskRequest request,
-            List<CuaHangVo> restaurants,
-            List<MenuItem> menuItems
-    ) {
-        SearchCriteria criteria = buildSearchCriteria(request);
-        return restaurants.stream()
-                .map(restaurant -> scoreRestaurant(criteria, restaurant, menuItems))
-                .filter(ScoredRestaurant::matched)
-                .sorted(scoredComparator(criteria))
-                .limit(5)
-                .map(ScoredRestaurant::restaurant)
-                .toList();
-    }
-
-    private SearchCriteria buildSearchCriteria(ChatbotAskRequest request) {
-        String normalizedQuestion = normalize(request.getQuestion());
-        String intent = detectFoodIntent(normalizedQuestion);
-        boolean locationAsked = asksLocation(normalizedQuestion);
-        boolean nearestAsked = asksNearest(normalizedQuestion);
-        List<String> words = meaningfulWords(normalizedQuestion);
-        List<String> locationWords = locationAsked
-                ? extractLocationWords(normalizedQuestion, intent)
-                : List.of();
-        BigDecimal minRating = extractMinRating(normalizedQuestion);
-        return new SearchCriteria(
-                normalizedQuestion,
-                intent,
-                words,
-                locationWords,
-                minRating,
-                nearestAsked,
-                request.getLatitude(),
-                request.getLongitude());
-    }
-
-    private ScoredRestaurant scoreRestaurant(SearchCriteria criteria, CuaHangVo restaurant, List<MenuItem> menuItems) {
-        int score = 0;
-        if (!criteria.foodIntent().isBlank()) {
-            if (!restaurantMatchesIntent(restaurant, criteria.foodIntent(), menuItems)) {
-                return ScoredRestaurant.unmatched(restaurant);
-            }
-            score += 40;
-        }
-
-        if (!criteria.locationWords().isEmpty()) {
-            if (restaurantMatchesLocation(restaurant, criteria.locationWords())) {
-                score += 30;
-            } else if (restaurantMatchesAnyLocationWord(restaurant, criteria.locationWords())) {
-                score += 15;
-            } else {
-                return ScoredRestaurant.unmatched(restaurant);
-            }
-        }
-
-        BigDecimal rating = restaurant.getDiemDanhGiaTrungBinh() == null
-                ? BigDecimal.ZERO
-                : restaurant.getDiemDanhGiaTrungBinh();
-        if (criteria.minRating() != null && rating.compareTo(criteria.minRating()) < 0) {
-            return ScoredRestaurant.unmatched(restaurant);
-        }
-        score += rating.multiply(BigDecimal.TEN).intValue();
-
-        if (criteria.foodIntent().isBlank() && criteria.locationWords().isEmpty()) {
-            if (!matchesQuestion(criteria.normalizedQuestion(), restaurant, menuItems, false, criteria.meaningfulWords())) {
-                return ScoredRestaurant.unmatched(restaurant);
-            }
-            score += 10;
-        }
-
-        Double distance = distanceInMeters(criteria.latitude(), criteria.longitude(), restaurant);
-        if (criteria.nearestRequested() && distance != null) {
-            score += Math.max(0, 30 - (int) Math.min(distance / 250, 30));
-        }
-        return new ScoredRestaurant(restaurant, true, score, rating, distance);
-    }
-
-    private Comparator<ScoredRestaurant> scoredComparator(SearchCriteria criteria) {
-        Comparator<ScoredRestaurant> comparator = Comparator.comparing(ScoredRestaurant::score).reversed()
-                .thenComparing(ScoredRestaurant::rating, Comparator.reverseOrder());
-        if (criteria.nearestRequested() && criteria.hasCoordinates()) {
-            comparator = Comparator.comparing(
-                            ScoredRestaurant::distance,
-                            Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(comparator);
-        }
-        return comparator;
-    }
-
-    private String detectFoodIntent(String normalizedQuestion) {
-        List<String> intents = List.of(
-                "mi",
-                "my",
-                "lau",
-                "pho",
-                "bun",
-                "com",
-                "ga",
-                "tra sua",
-                "trasua",
-                "cafe",
-                "coffee",
-                "pizza",
-                "banh mi",
-                "banhmi"
-        );
-        return intents.stream()
-                .filter(normalizedQuestion::contains)
-                .findFirst()
-                .map(intent -> switch (intent) {
-                    case "trasua" -> "tra sua";
-                    case "coffee" -> "cafe";
-                    case "banhmi" -> "banh mi";
-                    default -> intent;
-                })
-                .orElse("");
-    }
-
-    private boolean matchesQuestion(
-            String normalizedQuestion,
-            CuaHangVo restaurant,
-            List<MenuItem> menuItems,
-            boolean asksLocation,
-            List<String> meaningfulWords
-    ) {
-        if (normalizedQuestion.isBlank()) {
-            return false;
-        }
-        if (asksLocation) {
-            return restaurantMatchesLocation(restaurant, meaningfulWords);
-        }
-        String restaurantText = normalize("%s %s %s %s %s".formatted(
+    private String restaurantText(CuaHangVo restaurant) {
+        return normalize("%s %s %s %s %s".formatted(
                 nullToEmpty(restaurant.getTenQuanAn()),
                 nullToEmpty(restaurant.getDiaChi()),
                 nullToEmpty(restaurant.getLoaiCuaHang()),
                 nullToEmpty(restaurant.getLoaiKinhDoanh()),
                 nullToEmpty(restaurant.getMoTa())));
-        String menuText = menuText(restaurant.getId(), menuItems);
-        return meaningfulWords.stream()
-                .anyMatch(word -> containsTerm(restaurantText, word) || containsTerm(menuText, word));
     }
 
-    private boolean restaurantMatchesIntent(CuaHangVo restaurant, String intent, List<MenuItem> menuItems) {
-        String restaurantText = normalize("%s %s %s".formatted(
-                nullToEmpty(restaurant.getTenQuanAn()),
-                nullToEmpty(restaurant.getLoaiKinhDoanh()),
-                nullToEmpty(restaurant.getMoTa())));
-        return containsTerm(restaurantText, intent) || containsTerm(menuText(restaurant.getId(), menuItems), intent);
-    }
-
-    private boolean restaurantMatchesLocation(CuaHangVo restaurant, List<String> words) {
-        String address = normalize(restaurant.getDiaChi());
-        if (words.isEmpty()) {
-            return false;
-        }
-        String phrase = String.join(" ", words);
-        return address.contains(phrase) || words.stream().allMatch(word -> containsTerm(address, word));
-    }
-
-    private boolean restaurantMatchesAnyLocationWord(CuaHangVo restaurant, List<String> words) {
-        String address = normalize(restaurant.getDiaChi());
-        return words.stream()
-                .filter(word -> word.length() >= 4)
-                .anyMatch(word -> containsTerm(address, word));
-    }
-
-    private boolean containsTerm(String text, String term) {
-        if (text == null || text.isBlank() || term == null || term.isBlank()) {
-            return false;
-        }
-        if (term.contains(" ")) {
-            return text.contains(term);
-        }
-        return Pattern.compile("\\b" + Pattern.quote(term) + "\\b").matcher(text).find();
-    }
-
-    private boolean asksLocation(String normalizedQuestion) {
-        return normalizedQuestion.contains(" o ")
-                || normalizedQuestion.startsWith("o ")
-                || normalizedQuestion.contains("gan ")
-                || normalizedQuestion.contains("dia chi")
-                || normalizedQuestion.contains("vi tri")
-                || normalizedQuestion.contains("khu vuc");
-    }
-
-    private boolean asksNearest(String normalizedQuestion) {
-        return normalizedQuestion.contains("gan nhat") || normalizedQuestion.contains("gan toi");
-    }
-
-    private List<String> extractLocationWords(String normalizedQuestion, String foodIntent) {
-        String locationText = "";
-        List<String> markers = List.of(" o ", " tai ", " khu vuc ", " dia chi ", " vi tri ");
-        for (String marker : markers) {
-            int index = normalizedQuestion.indexOf(marker);
-            if (index >= 0) {
-                locationText = normalizedQuestion.substring(index + marker.length());
-                break;
-            }
-        }
-        if (locationText.isBlank() && normalizedQuestion.startsWith("o ")) {
-            locationText = normalizedQuestion.substring(2);
-        }
-        List<String> words = meaningfulWords(locationText.isBlank() ? normalizedQuestion : locationText);
-        if (foodIntent.isBlank()) {
-            return words;
-        }
-        Set<String> foodWords = Arrays.stream(foodIntent.split("\\s+")).collect(Collectors.toSet());
-        return words.stream()
-                .filter(word -> !foodWords.contains(word))
-                .toList();
-    }
-
-    private BigDecimal extractMinRating(String normalizedQuestion) {
-        java.util.regex.Matcher starMatcher = Pattern.compile("\\b([1-5])\\s*sao\\b").matcher(normalizedQuestion);
-        if (starMatcher.find()) {
-            return new BigDecimal(starMatcher.group(1));
-        }
-        java.util.regex.Matcher rangeMatcher = Pattern.compile("\\b(?:tren|tu|>=)\\s*([1-5])\\b").matcher(normalizedQuestion);
-        if (rangeMatcher.find()) {
-            return new BigDecimal(rangeMatcher.group(1));
-        }
-        if (normalizedQuestion.contains("danh gia cao")
-                || normalizedQuestion.contains("diem cao")
-                || normalizedQuestion.contains("tot")) {
-            return new BigDecimal("4.0");
-        }
-        return null;
-    }
-
-    private List<String> meaningfulWords(String normalizedQuestion) {
-        return Arrays.stream(normalizedQuestion.split("\\s+"))
-                .filter(word -> word.length() >= 2)
-                .filter(word -> !STOP_WORDS.contains(word))
-                .toList();
+    private String menuText(UUID restaurantId, List<MenuItem> menuItems) {
+        return normalize(menuItems.stream()
+                .filter(item -> item.getRestaurant() != null && restaurantId.equals(item.getRestaurant().getId()))
+                .map(item -> "%s %s %s".formatted(
+                        nullToEmpty(item.getName()),
+                        nullToEmpty(item.getFlavor()),
+                        nullToEmpty(item.getDescription())))
+                .collect(Collectors.joining(" ")));
     }
 
     private Double distanceInMeters(BigDecimal latitude, BigDecimal longitude, CuaHangVo restaurant) {
@@ -425,29 +484,6 @@ public class ChatbotServiceImpl implements ChatbotService {
         return 6371000D * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    private String buildMenuSummary(UUID restaurantId, List<MenuItem> menuItems) {
-        String summary = menuItems.stream()
-                .filter(item -> item.getRestaurant() != null && restaurantId.equals(item.getRestaurant().getId()))
-                .limit(8)
-                .map(item -> "%s%s".formatted(
-                        nullToEmpty(item.getName()),
-                        item.getFlavor() == null || item.getFlavor().isBlank()
-                                ? ""
-                                : " (" + item.getFlavor() + ")"))
-                .collect(Collectors.joining(", "));
-        return summary.isBlank() ? "Chưa có menu" : summary;
-    }
-
-    private String menuText(UUID restaurantId, List<MenuItem> menuItems) {
-        return normalize(menuItems.stream()
-                .filter(item -> item.getRestaurant() != null && restaurantId.equals(item.getRestaurant().getId()))
-                .map(item -> "%s %s %s".formatted(
-                        nullToEmpty(item.getName()),
-                        nullToEmpty(item.getFlavor()),
-                        nullToEmpty(item.getDescription())))
-                .collect(Collectors.joining(" ")));
-    }
-
     private String normalize(String value) {
         if (value == null) {
             return "";
@@ -457,7 +493,7 @@ public class ChatbotServiceImpl implements ChatbotService {
                 .replaceAll("")
                 .replace('đ', 'd')
                 .replace('Đ', 'D');
-        return withoutDiacritics.toLowerCase()
+        return withoutDiacritics.toLowerCase(Locale.ROOT)
                 .replace('_', ' ')
                 .replace('-', ' ')
                 .replaceAll("[^a-z0-9\\s]", " ")
@@ -465,23 +501,39 @@ public class ChatbotServiceImpl implements ChatbotService {
                 .trim();
     }
 
+    private String text(JsonNode node, String fieldName) {
+        JsonNode value = node == null ? null : node.get(fieldName);
+        return value == null || value.isNull() ? "" : value.asText().trim();
+    }
+
+    private BigDecimal decimal(JsonNode node, String fieldName) {
+        JsonNode value = node == null ? null : node.get(fieldName);
+        if (value == null || value.isNull() || !value.isNumber()) {
+            return null;
+        }
+        return value.decimalValue();
+    }
+
+    private int intValue(JsonNode node, String fieldName, int defaultValue) {
+        JsonNode value = node == null ? null : node.get(fieldName);
+        return value == null || !value.canConvertToInt() ? defaultValue : value.asInt(defaultValue);
+    }
+
     private String nullToEmpty(Object value) {
         return value == null ? "" : value.toString();
     }
 
-    private record SearchCriteria(
-            String normalizedQuestion,
-            String foodIntent,
-            List<String> meaningfulWords,
-            List<String> locationWords,
+    private record ToolCriteria(
+            String query,
+            String location,
+            String category,
             BigDecimal minRating,
-            boolean nearestRequested,
+            boolean openNow,
+            String sortBy,
+            int limit,
             BigDecimal latitude,
             BigDecimal longitude
     ) {
-        boolean hasCoordinates() {
-            return latitude != null && longitude != null;
-        }
     }
 
     private record ScoredRestaurant(
